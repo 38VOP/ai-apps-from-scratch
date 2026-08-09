@@ -1,5 +1,6 @@
 import os
 import json
+import sqlite3
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text
@@ -20,6 +21,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+class TelegramAccount(Base):
+    __tablename__ = "telegram_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, default="Основний акаунт")
+    api_id = Column(String, nullable=True)
+    api_hash = Column(String, nullable=True)
+    phone_number = Column(String, nullable=True)
+    is_authorized = Column(Boolean, default=False)
+    session_string = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    channels = relationship("Channel", back_populates="account")
+
+
 class Category(Base):
     __tablename__ = "categories"
 
@@ -27,6 +43,8 @@ class Category(Base):
     name = Column(String, nullable=False)
     slug = Column(String, unique=True, index=True, nullable=False)
     icon = Column(String, default="box")
+    sort_order = Column(Integer, default=0)
+    is_visible = Column(Boolean, default=True)
     is_custom = Column(Boolean, default=False)
 
     models = relationship("ModelItem", back_populates="category")
@@ -39,10 +57,18 @@ class Channel(Base):
     telegram_id = Column(String, unique=True, index=True)
     title = Column(String, nullable=False)
     username = Column(String, nullable=True)
-    last_scanned_id = Column(Integer, default=0)
+    account_id = Column(Integer, ForeignKey("telegram_accounts.id"), nullable=True)
+    
     enabled = Column(Boolean, default=True)
+    status = Column(String, default="idle")
+    status_message = Column(String, nullable=True)
+    
+    last_scanned_id = Column(Integer, default=0)
+    last_synced_at = Column(DateTime, nullable=True)
+    processed_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    account = relationship("TelegramAccount", back_populates="channels")
     models = relationship("ModelItem", back_populates="channel", cascade="all, delete-orphan")
 
 
@@ -56,10 +82,6 @@ class ModelItem(Base):
     description = Column(Text, nullable=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False)
     
-    file_formats = Column(String, default="[]")  # JSON string
-    archive_types = Column(String, default="[]")  # JSON string
-    render_engines = Column(String, default="[]")  # JSON string
-    
     preview_path = Column(String, nullable=True)
     telegram_post_url = Column(String, nullable=False)
     post_date = Column(DateTime, nullable=True)
@@ -68,24 +90,6 @@ class ModelItem(Base):
 
     category = relationship("Category", back_populates="models")
     channel = relationship("Channel", back_populates="models")
-
-    def get_formats_list(self) -> List[str]:
-        try:
-            return json.loads(self.file_formats) if self.file_formats else []
-        except Exception:
-            return []
-
-    def get_archives_list(self) -> List[str]:
-        try:
-            return json.loads(self.archive_types) if self.archive_types else []
-        except Exception:
-            return []
-
-    def get_renders_list(self) -> List[str]:
-        try:
-            return json.loads(self.render_engines) if self.render_engines else []
-        except Exception:
-            return []
 
 
 class TelegramConfig(Base):
@@ -99,35 +103,93 @@ class TelegramConfig(Base):
     session_string = Column(Text, nullable=True)
 
 
-DEFAULT_CATEGORIES = [
-    {"name": "Меблі", "slug": "furniture", "icon": "armchair"},
-    {"name": "Освітлення", "slug": "lighting", "icon": "lamp"},
-    {"name": "Декор", "slug": "decor", "icon": "flower"},
-    {"name": "Рослини & Зелень", "slug": "plants", "icon": "tree"},
-    {"name": "Техніка & Електроніка", "slug": "appliances", "icon": "tv"},
-    {"name": "Архітектура & Екстер'єр", "slug": "architecture", "icon": "building"},
-    {"name": "Текстури & Матеріали", "slug": "textures", "icon": "layers"},
-    {"name": "Транспорт", "slug": "vehicles", "icon": "car"},
-    {"name": "Інше", "slug": "other", "icon": "box"},
+DEFAULT_USER_CATEGORIES = [
+    {"name": "Меблі", "slug": "furniture", "icon": "armchair", "sort_order": 1, "is_visible": True},
+    {"name": "Освітлення", "slug": "lighting", "icon": "lamp", "sort_order": 2, "is_visible": True},
+    {"name": "Декор", "slug": "decor", "icon": "flower", "sort_order": 3, "is_visible": True},
+    {"name": "Рослини & Зелень", "slug": "plants", "icon": "tree", "sort_order": 4, "is_visible": True},
+    {"name": "Техніка & Електроніка", "slug": "appliances", "icon": "tv", "sort_order": 5, "is_visible": True},
+    {"name": "Архітектура & Екстер'єр", "slug": "architecture", "icon": "building", "sort_order": 6, "is_visible": True},
+    {"name": "Текстури & Матеріали", "slug": "textures", "icon": "layers", "sort_order": 7, "is_visible": True},
+    {"name": "Транспорт", "slug": "vehicles", "icon": "car", "sort_order": 8, "is_visible": True},
+    {"name": "Інше", "slug": "other", "icon": "box", "sort_order": 99, "is_visible": True},
 ]
 
 
+def migrate_sqlite_columns():
+    """Migrates existing SQLite tables if new columns are added."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    # Check categories table
+    cursor.execute("PRAGMA table_info(categories)")
+    cat_cols = [row[1] for row in cursor.fetchall()]
+    if cat_cols:
+        if "sort_order" not in cat_cols:
+            cursor.execute("ALTER TABLE categories ADD COLUMN sort_order INTEGER DEFAULT 0")
+        if "is_visible" not in cat_cols:
+            cursor.execute("ALTER TABLE categories ADD COLUMN is_visible BOOLEAN DEFAULT 1")
+
+    # Check channels table
+    cursor.execute("PRAGMA table_info(channels)")
+    ch_cols = [row[1] for row in cursor.fetchall()]
+    if ch_cols:
+        if "account_id" not in ch_cols:
+            cursor.execute("ALTER TABLE channels ADD COLUMN account_id INTEGER")
+        if "status" not in ch_cols:
+            cursor.execute("ALTER TABLE channels ADD COLUMN status TEXT DEFAULT 'idle'")
+        if "status_message" not in ch_cols:
+            cursor.execute("ALTER TABLE channels ADD COLUMN status_message TEXT")
+        if "last_synced_at" not in ch_cols:
+            cursor.execute("ALTER TABLE channels ADD COLUMN last_synced_at TIMESTAMP")
+        if "processed_count" not in ch_cols:
+            cursor.execute("ALTER TABLE channels ADD COLUMN processed_count INTEGER DEFAULT 0")
+
+    conn.commit()
+    conn.close()
+
+
 def init_db():
+    migrate_sqlite_columns()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         # Seed default categories if missing
-        existing_count = db.query(Category).count()
-        if existing_count == 0:
-            for cat_data in DEFAULT_CATEGORIES:
+        if db.query(Category).count() == 0:
+            for cat_data in DEFAULT_USER_CATEGORIES:
                 cat = Category(
                     name=cat_data["name"],
                     slug=cat_data["slug"],
                     icon=cat_data["icon"],
+                    sort_order=cat_data["sort_order"],
+                    is_visible=cat_data["is_visible"],
                     is_custom=False
                 )
                 db.add(cat)
             db.commit()
+
+        # Seed default main account if missing
+        if db.query(TelegramAccount).count() == 0:
+            old_cfg = db.query(TelegramConfig).first()
+            acc = TelegramAccount(
+                name="Основний Telegram Акаунт",
+                api_id=old_cfg.api_id if old_cfg else None,
+                api_hash=old_cfg.api_hash if old_cfg else None,
+                phone_number=old_cfg.phone_number if old_cfg else None,
+                is_authorized=old_cfg.is_authorized if old_cfg else False,
+                session_string=old_cfg.session_string if old_cfg else None
+            )
+            db.add(acc)
+            db.commit()
+            db.refresh(acc)
+
+            # Bind existing channels to main account
+            channels = db.query(Channel).all()
+            for ch in channels:
+                if not ch.account_id:
+                    ch.account_id = acc.id
+            db.commit()
+
     finally:
         db.close()
 
