@@ -479,6 +479,20 @@ export default function App() {
                     <div className="card-body">
                       <h3 className="card-title">{model.title}</h3>
 
+                      {(model.file_formats?.length > 0 || model.render_engines?.length > 0 || model.archive_types?.length > 0) && (
+                        <div className="card-tags">
+                          {model.file_formats?.map(f => (
+                            <span key={`fmt-${f}`} className="meta-tag meta-tag-format">{f}</span>
+                          ))}
+                          {model.render_engines?.map(r => (
+                            <span key={`ren-${r}`} className="meta-tag meta-tag-render">{r}</span>
+                          ))}
+                          {model.archive_types?.map(a => (
+                            <span key={`arc-${a}`} className="meta-tag meta-tag-archive">{a}</span>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="card-footer" onClick={e => e.stopPropagation()}>
                         <span className="channel-badge">{model.channel_title}</span>
                         <a 
@@ -922,6 +936,20 @@ export default function App() {
               />
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{selectedModel.title}</h3>
+
+                {(selectedModel.file_formats?.length > 0 || selectedModel.render_engines?.length > 0 || selectedModel.archive_types?.length > 0) && (
+                  <div className="card-tags">
+                    {selectedModel.file_formats?.map(f => (
+                      <span key={`fmt-${f}`} className="meta-tag meta-tag-format">{f}</span>
+                    ))}
+                    {selectedModel.render_engines?.map(r => (
+                      <span key={`ren-${r}`} className="meta-tag meta-tag-render">{r}</span>
+                    ))}
+                    {selectedModel.archive_types?.map(a => (
+                      <span key={`arc-${a}`} className="meta-tag meta-tag-archive">{a}</span>
+                    ))}
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label className="form-label">Перенести в категорію:</label>

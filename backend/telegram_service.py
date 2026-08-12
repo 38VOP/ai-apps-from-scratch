@@ -1,5 +1,6 @@
 import os
 import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -215,7 +216,10 @@ class MultiAccountTelegramServiceManager:
                     preview_path=preview_rel_path,
                     telegram_post_url=post_url,
                     post_date=msg.date or datetime.utcnow(),
-                    raw_text=msg.text
+                    raw_text=msg.text,
+                    file_formats=json.dumps(formats, ensure_ascii=False),
+                    archive_types=json.dumps(archives, ensure_ascii=False),
+                    render_engines=json.dumps(renders, ensure_ascii=False)
                 )
                 db.add(model)
                 new_items_count += 1
@@ -326,42 +330,60 @@ def seed_demo_data_if_needed(db: Session, channel: Channel) -> int:
             "desc": "Стильний тримісний диван в оксамитовій оббивці. 3ds Max 2021 + Corona Renderer.",
             "cat": "furniture",
             "post_id": 101,
-            "img": "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=800&q=80"
+            "img": "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=800&q=80",
+            "formats": ["3ds Max"],
+            "archives": ["ZIP"],
+            "renders": ["Corona"]
         },
         {
             "title": "Дизайнерська Люстра Nordic Brass Pendant Lamp",
             "desc": "Підвісний латунний світильник для вітальні або їдальні. 3ds Max 2020, V-Ray, Corona Renderer.",
             "cat": "lighting",
             "post_id": 102,
-            "img": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=800&q=80"
+            "img": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=800&q=80",
+            "formats": ["3ds Max"],
+            "archives": ["RAR"],
+            "renders": ["V-Ray", "Corona"]
         },
         {
             "title": "Скандинавський Набір Декору та Вази",
             "desc": "Набір керамічних ваз з гілками евкаліпта та свічками. 3ds Max + Blender.",
             "cat": "decor",
             "post_id": 103,
-            "img": "https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=800&q=80"
+            "img": "https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?auto=format&fit=crop&w=800&q=80",
+            "formats": ["3ds Max", "Blender"],
+            "archives": ["ZIP", "7Z"],
+            "renders": ["Corona"]
         },
         {
             "title": "Кімнатний Фікус Monstera та Ficus Plant Set",
             "desc": "Високодеталізовані кімнатні рослини в бетонних вазонах. PBR текстури 4K.",
             "cat": "plants",
             "post_id": 104,
-            "img": "https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=800&q=80"
+            "img": "https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=800&q=80",
+            "formats": ["FBX"],
+            "archives": ["ZIP"],
+            "renders": []
         },
         {
             "title": "Кухонна Кавомашина DeLonghi Specialista",
             "desc": "Детальна модель ріжкової кавоварки DeLonghi для інтерєрних візуалізацій кухонь.",
             "cat": "appliances",
             "post_id": 105,
-            "img": "https://images.unsplash.com/photo-1517668808822-9e428824603b?auto=format&fit=crop&w=800&q=80"
+            "img": "https://images.unsplash.com/photo-1517668808822-9e428824603b?auto=format&fit=crop&w=800&q=80",
+            "formats": ["3ds Max"],
+            "archives": ["ZIP"],
+            "renders": ["V-Ray"]
         },
         {
             "title": "Безшовний Деревяний Паркет Oak Flooring PBR",
             "desc": "Набір 4K безшовних текстур паркету ялинкою Herringbone. Дифуз, нормалі, шорсткість.",
             "cat": "textures",
             "post_id": 106,
-            "img": "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80"
+            "img": "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80",
+            "formats": [],
+            "archives": ["ZIP"],
+            "renders": []
         }
     ]
 
@@ -379,7 +401,10 @@ def seed_demo_data_if_needed(db: Session, channel: Channel) -> int:
             preview_path=d["img"],
             telegram_post_url=f"https://t.me/{username}/{d['post_id']}",
             post_date=datetime.utcnow(),
-            raw_text=d["desc"]
+            raw_text=d["desc"],
+            file_formats=json.dumps(d.get("formats", []), ensure_ascii=False),
+            archive_types=json.dumps(d.get("archives", []), ensure_ascii=False),
+            render_engines=json.dumps(d.get("renders", []), ensure_ascii=False)
         )
         db.add(model)
         added += 1

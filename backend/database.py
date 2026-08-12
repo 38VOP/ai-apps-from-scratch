@@ -87,6 +87,9 @@ class ModelItem(Base):
     telegram_post_url = Column(String, nullable=False)
     post_date = Column(DateTime, nullable=True)
     raw_text = Column(Text, nullable=True)
+    file_formats = Column(Text, nullable=True)     # JSON list, e.g. ["3ds Max","FBX"]
+    archive_types = Column(Text, nullable=True)   # JSON list, e.g. ["ZIP"]
+    render_engines = Column(Text, nullable=True)  # JSON list, e.g. ["V-Ray","Corona"]
     created_at = Column(DateTime, default=datetime.utcnow)
 
     category = relationship("Category", back_populates="models")
@@ -147,6 +150,17 @@ def migrate_sqlite_columns():
             cursor.execute("ALTER TABLE channels ADD COLUMN last_synced_at TIMESTAMP")
         if "processed_count" not in ch_cols:
             cursor.execute("ALTER TABLE channels ADD COLUMN processed_count INTEGER DEFAULT 0")
+
+    # Check models table
+    cursor.execute("PRAGMA table_info(models)")
+    m_cols = [row[1] for row in cursor.fetchall()]
+    if m_cols:
+        if "file_formats" not in m_cols:
+            cursor.execute("ALTER TABLE models ADD COLUMN file_formats TEXT")
+        if "archive_types" not in m_cols:
+            cursor.execute("ALTER TABLE models ADD COLUMN archive_types TEXT")
+        if "render_engines" not in m_cols:
+            cursor.execute("ALTER TABLE models ADD COLUMN render_engines TEXT")
 
     conn.commit()
     conn.close()

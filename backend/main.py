@@ -337,6 +337,35 @@ def delete_category(category_id: int, db: Session = Depends(get_db)):
     return {"success": True, "message": "Категорію видалено"}
 
 
+def serialize_model(item: ModelItem) -> dict:
+    def parse_list(raw):
+        if not raw:
+            return []
+        try:
+            val = json.loads(raw)
+            return val if isinstance(val, list) else [val]
+        except (ValueError, TypeError):
+            return [raw]
+
+    return {
+        "id": item.id,
+        "telegram_message_id": item.telegram_message_id,
+        "channel_id": item.channel_id,
+        "channel_title": item.channel.title if item.channel else "Канал",
+        "title": item.title,
+        "description": item.description,
+        "category_id": item.category_id,
+        "category_name": item.category.name if item.category else "Інше",
+        "preview_path": item.preview_path,
+        "telegram_post_url": item.telegram_post_url,
+        "post_date": item.post_date.isoformat() if item.post_date else None,
+        "file_formats": parse_list(item.file_formats),
+        "archive_types": parse_list(item.archive_types),
+        "render_engines": parse_list(item.render_engines),
+        "created_at": item.created_at.isoformat()
+    }
+
+
 # --- CATALOG MODELS ENDPOINTS ---
 
 @app.get("/api/models")
@@ -386,20 +415,7 @@ def get_models(
 
     result_items = []
     for item in items:
-        result_items.append({
-            "id": item.id,
-            "telegram_message_id": item.telegram_message_id,
-            "channel_id": item.channel_id,
-            "channel_title": item.channel.title if item.channel else "Канал",
-            "title": item.title,
-            "description": item.description,
-            "category_id": item.category_id,
-            "category_name": item.category.name if item.category else "Інше",
-            "preview_path": item.preview_path,
-            "telegram_post_url": item.telegram_post_url,
-            "post_date": item.post_date.isoformat() if item.post_date else None,
-            "created_at": item.created_at.isoformat()
-        })
+        result_items.append(serialize_model(item))
 
     return {
         "total": total,
@@ -415,20 +431,9 @@ def get_model_detail(model_id: int, db: Session = Depends(get_db)):
     item = db.query(ModelItem).filter(ModelItem.id == model_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Модель не знайдено")
-    return {
-        "id": item.id,
-        "telegram_message_id": item.telegram_message_id,
-        "channel_id": item.channel_id,
-        "channel_title": item.channel.title if item.channel else "Канал",
-        "title": item.title,
-        "description": item.description,
-        "category_id": item.category_id,
-        "category_name": item.category.name if item.category else "Інше",
-        "preview_path": item.preview_path,
-        "telegram_post_url": item.telegram_post_url,
-        "post_date": item.post_date.isoformat() if item.post_date else None,
-        "raw_text": item.raw_text
-    }
+    detail = serialize_model(item)
+    detail["raw_text"] = item.raw_text
+    return detail
 
 
 @app.patch("/api/models/{model_id}")
