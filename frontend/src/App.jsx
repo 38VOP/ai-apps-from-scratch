@@ -599,8 +599,16 @@ export default function App() {
                         </td>
 
                         <td>
-                          <span className={`status-pill ${ch.status === 'active' ? 'active' : ch.status === 'syncing' ? 'idle' : 'error'}`}>
-                            {ch.status === 'active' ? '🟢 Активний' : ch.status === 'syncing' ? '🟡 Синхронізація' : '⚪ Вимкнено'}
+                          <span className={`status-pill ${
+                            ch.status === 'initial_scan' ? 'idle' : 
+                            ch.status === 'syncing' ? 'idle' : 
+                            ch.status === 'up_to_date' || ch.status === 'active' ? 'active' : 
+                            ch.status === 'error' ? 'error' : 'idle'
+                          }`}>
+                            {ch.status === 'initial_scan' ? '🔵 Initial Scan' : 
+                             ch.status === 'syncing' ? '🟡 Syncing' : 
+                             ch.status === 'up_to_date' || ch.status === 'active' ? '🟢 Up to Date' : 
+                             ch.status === 'error' ? '🔴 Error' : '⚪ Idle'}
                           </span>
                         </td>
 

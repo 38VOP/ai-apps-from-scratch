@@ -11,7 +11,7 @@ from sqlalchemy import or_, desc, asc, func
 from database import init_db, get_db, DB_DIR, PREVIEWS_DIR, Category, Channel, ModelItem, TelegramAccount
 from telegram_service import telegram_manager, seed_demo_data_if_needed
 
-app = FastAPI(title="3D Model Telegram Aggregator API v1.1.0", version="1.1.0")
+app = FastAPI(title="3D Model Telegram Aggregator API v1.2.0", version="1.2.0")
 
 # Enable CORS for Vite frontend
 app.add_middleware(
@@ -175,6 +175,7 @@ def get_channels(db: Session = Depends(get_db)):
             "account_id": ch.account_id,
             "account_name": acc_name,
             "enabled": ch.enabled,
+            "initial_scan_completed": ch.initial_scan_completed or False,
             "status": ch.status or "idle",
             "status_message": ch.status_message or "",
             "last_synced_at": ch.last_synced_at.isoformat() if ch.last_synced_at else None,

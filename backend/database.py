@@ -60,7 +60,8 @@ class Channel(Base):
     account_id = Column(Integer, ForeignKey("telegram_accounts.id"), nullable=True)
     
     enabled = Column(Boolean, default=True)
-    status = Column(String, default="idle")
+    initial_scan_completed = Column(Boolean, default=False)
+    status = Column(String, default="idle")  # 'initial_scan', 'syncing', 'up_to_date', 'idle', 'error', 'disabled'
     status_message = Column(String, nullable=True)
     
     last_scanned_id = Column(Integer, default=0)
@@ -136,6 +137,8 @@ def migrate_sqlite_columns():
     if ch_cols:
         if "account_id" not in ch_cols:
             cursor.execute("ALTER TABLE channels ADD COLUMN account_id INTEGER")
+        if "initial_scan_completed" not in ch_cols:
+            cursor.execute("ALTER TABLE channels ADD COLUMN initial_scan_completed BOOLEAN DEFAULT 0")
         if "status" not in ch_cols:
             cursor.execute("ALTER TABLE channels ADD COLUMN status TEXT DEFAULT 'idle'")
         if "status_message" not in ch_cols:
