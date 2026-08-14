@@ -46,6 +46,7 @@ class Category(Base):
     sort_order = Column(Integer, default=0)
     is_visible = Column(Boolean, default=True)
     is_active = Column(Boolean, default=True)
+    is_marked_for_deletion = Column(Boolean, default=False)
     is_custom = Column(Boolean, default=False)
 
     models = relationship("ModelItem", back_populates="category")
@@ -170,6 +171,8 @@ def migrate_sqlite_columns():
             cursor.execute("ALTER TABLE categories ADD COLUMN is_visible BOOLEAN DEFAULT 1")
         if "is_active" not in cat_cols:
             cursor.execute("ALTER TABLE categories ADD COLUMN is_active BOOLEAN DEFAULT 1")
+        if "is_marked_for_deletion" not in cat_cols:
+            cursor.execute("ALTER TABLE categories ADD COLUMN is_marked_for_deletion BOOLEAN DEFAULT 0")
 
     # Check channels table
     cursor.execute("PRAGMA table_info(channels)")

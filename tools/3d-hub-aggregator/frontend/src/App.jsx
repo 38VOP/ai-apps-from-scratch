@@ -64,6 +64,10 @@ export default function App() {
   const [newProjectName, setNewProjectName] = useState('')
   const [selectedModelsForProject, setSelectedModelsForProject] = useState([])
 
+  // Collapsible sidebar sections
+  const [catsExpanded, setCatsExpanded] = useState(true)
+  const [projectsExpanded, setProjectsExpanded] = useState(true)
+
   useEffect(() => {
     fetchUserCategories()
     fetchAccounts()
@@ -109,7 +113,13 @@ export default function App() {
       const data = await res.json()
       setCategories(data)
       const statuses = {}
-      data.forEach(c => { statuses[c.id] = { active: c.is_active !== false, visible: c.is_visible !== false } })
+      data.forEach(c => { 
+        statuses[c.id] = { 
+          active: c.is_active !== false, 
+          visible: c.is_visible !== false,
+          markedForDeletion: c.is_marked_for_deletion || false
+        } 
+      })
       setCatStatuses(statuses)
     } catch (err) {
       console.error('Error fetching categories:', err)
@@ -432,19 +442,30 @@ export default function App() {
 
   // --- CATEGORIES MANAGEMENT HANDLERS ---
 
-  const handleToggleCategoryStatus = async (catId, type) => {
-    const current = catStatuses[catId] || { active: true, visible: true }
-    const newVal = type === 'active' ? !current.active : !current.visible
+  const handleToggleCategoryStatus = async (catId) => {
+    const current = catStatuses[catId] || { active: true, visible: true, markedForDeletion: false }
+    
+    let nextActive, nextMarkedForDeletion
+    if (current.active && !current.markedForDeletion) {
+      nextActive = false
+      nextMarkedForDeletion = false
+    } else if (!current.active && !current.markedForDeletion) {
+      nextActive = false
+      nextMarkedForDeletion = true
+    } else {
+      nextActive = true
+      nextMarkedForDeletion = false
+    }
     
     try {
       await fetch(`/api/categories/${catId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [type]: newVal })
+        body: JSON.stringify({ is_active: nextActive, is_marked_for_deletion: nextMarkedForDeletion })
       })
       setCatStatuses(prev => ({
         ...prev,
-        [catId]: { ...prev[catId], [type]: newVal }
+        [catId]: { ...prev[catId], active: nextActive, markedForDeletion: nextMarkedForDeletion }
       }))
     } catch (err) {
       console.error('Error updating category status:', err)
@@ -546,6 +567,24 @@ export default function App() {
       setSelectedModel(null)
     } catch (err) {
       console.error('Error deleting model:', err)
+    }
+  }
+
+  const handleRefreshPreview = async (modelId) => {
+    try {
+      const res = await fetch(`/api/models/${modelId}/refresh-preview`, { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        setSelectedModel(prev => prev ? { ...prev, preview_path: data.preview_path } : null)
+        fetchModels()
+        setGlobalSyncMsg('Прев\'ю оновлено')
+        setTimeout(() => setGlobalSyncMsg(''), 2000)
+      } else {
+        setGlobalSyncMsg(data.message)
+        setTimeout(() => setGlobalSyncMsg(''), 3000)
+      }
+    } catch (err) {
+      console.error('Error refreshing preview:', err)
     }
   }
 
@@ -651,38 +690,83 @@ export default function App() {
           {/* SIDEBAR */}
           <aside className="sidebar">
             <div>
-              <div className="sidebar-title">Мої Категорії</div>
-              
-              <ul className="nav-list">
-                <li 
-                  className={`nav-item ${selectedCategory === null ? 'active' : ''}`}
-                  onClick={() => { setSelectedCategory(null); setCurrentPage(1); }}
+              {/* Categories Section */}
+              <div className="sidebar-section">
+                <div 
+                  className="sidebar-section-header"
+                  onClick={() => setCatsExpanded(!catsExpanded)}
                 >
-                  <span>Усі категорії</span>
-                  <span className="badge-count">{totalModels}</span>
-                </li>
+                  <div className="sidebar-title" style={{ marginBottom: 0 }}>Мої Категорії</div>
+                  <span className="collapse-icon">{catsExpanded ? '−' : '+'}</span>
+                </div>
+                
+                {catsExpanded && (
+                  <>
+                    <ul className="nav-list">
+                      <li 
+                        className={`nav-item ${selectedCategory === null ? 'active' : ''}`}
+                        onClick={() => { setSelectedCategory(null); setCurrentPage(1); }}
+                      >
+                        <span>Усі категорії</span>
+                        <span className="badge-count">{totalModels}</span>
+                      </li>
 
-                {categories.filter(c => c.is_visible).map(cat => (
-                  <li
-                    key={cat.id}
-                    className={`nav-item ${selectedCategory === cat.id ? 'active' : ''}`}
-                    onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}
-                  >
-                    <span>{cat.name}</span>
-                    <span className="badge-count">{cat.count}</span>
-                  </li>
-                ))}
-              </ul>
+                      {categories.filter(c => c.is_visible).map(cat => (
+                        <li
+                          key={cat.id}
+                          className={`nav-item ${selectedCategory === cat.id ? 'active' : ''}`}
+                          onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}
+                        >
+                          <span>{cat.name}</span>
+                          <span className="badge-count">{cat.count}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <button 
+                      className="btn btn-secondary btn-sm" 
+                      style={{ width: '100%', marginTop: 12, justifyContent: 'center' }}
+                      onClick={() => { fetchUserCategories(true); setShowCatManagerModal(true); }}
+                    >
+                      <Settings size={14} />
+                      <span>Налаштувати</span>
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Projects Section */}
+              <div className="sidebar-section" style={{ marginTop: 16 }}>
+                <div 
+                  className="sidebar-section-header"
+                  onClick={() => setProjectsExpanded(!projectsExpanded)}
+                >
+                  <div className="sidebar-title" style={{ marginBottom: 0 }}>Проекти</div>
+                  <span className="collapse-icon">{projectsExpanded ? '−' : '+'}</span>
+                </div>
+                
+                {projectsExpanded && (
+                  <ul className="nav-list">
+                    {projects.length === 0 ? (
+                      <li className="nav-item" style={{ opacity: 0.5, cursor: 'default' }}>
+                        <span>Немає проектів</span>
+                      </li>
+                    ) : (
+                      projects.map(proj => (
+                        <li
+                          key={proj.id}
+                          className={`nav-item ${selectedProject?.id === proj.id && activeTab === 'projects' ? 'active' : ''}`}
+                          onClick={() => { setActiveTab('projects'); fetchProjectDetail(proj.id); }}
+                        >
+                          <span>{proj.name}</span>
+                          <span className="badge-count">{proj.item_count}</span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+              </div>
             </div>
-
-            <button 
-              className="btn btn-secondary" 
-              style={{ width: '100%', marginTop: 24, justifyContent: 'center' }}
-              onClick={() => { fetchUserCategories(true); setShowCatManagerModal(true); }}
-            >
-              <Settings size={16} />
-              <span>Налаштувати категорії</span>
-            </button>
           </aside>
 
           {/* CATALOG MODELS GRID */}
@@ -1328,20 +1412,27 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-              {categories.map((cat, idx) => (
+              {categories.map((cat, idx) => {
+                const status = catStatuses[cat.id] || { active: true, visible: true, markedForDeletion: false }
+                const statusClass = status.markedForDeletion ? 'red' : status.active ? 'green' : 'neutral'
+                const statusIcon = status.markedForDeletion ? <AlertCircle size={18} /> : status.active ? <CheckCircle size={18} /> : <Zap size={18} />
+                const statusTitle = status.markedForDeletion ? 'Позначена на видалення' : status.active ? 'Активна для класифікатора' : 'Нейтральна'
+                
+                return (
                 <div key={cat.id} className="cat-manage-item">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <button 
                       type="button"
-                      className={`cat-status-btn ${catStatuses[cat.id]?.active ? 'green' : cat.is_custom ? 'red' : 'neutral'}`}
-                      onClick={() => handleToggleCategoryStatus(cat.id, 'active')}
-                      title={catStatuses[cat.id]?.active ? 'Деактивувати для класифікатора' : 'Активувати для класифікатора'}
+                      className={`cat-status-btn ${statusClass}`}
+                      onClick={() => handleToggleCategoryStatus(cat.id)}
+                      title={statusTitle}
                     >
-                      {catStatuses[cat.id]?.active ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                      {statusIcon}
                     </button>
                     <span style={{ 
                       fontWeight: 600, 
-                      opacity: catStatuses[cat.id]?.visible !== false ? 1 : 0.4 
+                      opacity: status.visible !== false ? 1 : 0.4,
+                      textDecoration: status.markedForDeletion ? 'line-through' : 'none'
                     }}>
                       {cat.name}
                     </span>
@@ -1376,7 +1467,8 @@ export default function App() {
                     )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
@@ -1617,13 +1709,22 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20, alignItems: 'center' }}>
-              <button 
-                className="btn btn-danger btn-sm"
-                onClick={() => handleDeleteModel(selectedModel.id)}
-              >
-                <Trash2 size={14} />
-                <span>Видалити модель</span>
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button 
+                  className="btn btn-danger btn-sm"
+                  onClick={() => handleDeleteModel(selectedModel.id)}
+                >
+                  <Trash2 size={14} />
+                  <span>Видалити</span>
+                </button>
+                <button 
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleRefreshPreview(selectedModel.id)}
+                >
+                  <RefreshCw size={14} />
+                  <span>Оновити прев'ю</span>
+                </button>
+              </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <button 
                   className="btn btn-primary btn-sm"

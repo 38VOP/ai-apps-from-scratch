@@ -257,6 +257,32 @@ body {
   justify-content: space-between;
 }
 
+.sidebar-section {
+  margin-bottom: 8px;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s ease;
+}
+
+.sidebar-section-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.collapse-icon {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 20px;
+  text-align: center;
+}
+
 .sidebar-title {
   font-size: 0.75rem;
   font-weight: 700;

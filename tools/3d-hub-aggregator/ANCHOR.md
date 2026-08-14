@@ -23,7 +23,7 @@ ANCHOR — 3d-hub-aggregator
 MOD-CART	Кошик	v1.0
 MOD-PROJECTS	Проекти	v1.0
 MOD-CATALOG	Каталог + пагінація	v1.0
-MOD-CATEGORIZE	Категорії + авто-класифікація + прев'ю	v1.0
+MOD-CATEGORIZE	Категорії + авто-класифікація + прев'ю	v1.1
 MOD-PARSER	Парсинг-двигун (черга, backlog/monitoring, анти-бан)	v1.0
 MOD-SOURCES	Джерела (Telegram-акаунти + канали)	v1.0
 MOD-ADMIN	Адмінка/дашборд статистики	v1.0

@@ -98,6 +98,7 @@ class ModelUpdate(BaseModel):
 class CategoryStatusUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_visible: Optional[bool] = None
+    is_marked_for_deletion: Optional[bool] = None
 
 
 class ProjectCreate(BaseModel):
@@ -338,22 +339,6 @@ def reorder_categories(body: CategoryReorderRequest, db: Session = Depends(get_d
             cat.sort_order = idx + 1
     db.commit()
     return {"success": True, "message": "Порядок категорій збережено"}
-
-
-@app.delete("/api/categories/{category_id}")
-def delete_category(category_id: int, db: Session = Depends(get_db)):
-    cat = db.query(Category).filter(Category.id == category_id).first()
-    if not cat:
-        raise HTTPException(status_code=404, detail="Категорію не знайдено")
-
-    # Move models in this category to 'other' category
-    other_cat = db.query(Category).filter(Category.slug == "other").first()
-    if other_cat and other_cat.id != cat.id:
-        db.query(ModelItem).filter(ModelItem.category_id == cat.id).update({"category_id": other_cat.id})
-
-    db.delete(cat)
-    db.commit()
-    return {"success": True, "message": "Категорію видалено"}
 
 
 def serialize_model(item: ModelItem) -> dict:
@@ -686,6 +671,8 @@ def update_category_status(category_id: int, body: CategoryStatusUpdate, db: Ses
         cat.is_active = body.is_active
     if body.is_visible is not None:
         cat.is_visible = body.is_visible
+    if body.is_marked_for_deletion is not None:
+        cat.is_marked_for_deletion = body.is_marked_for_deletion
     
     db.commit()
     return {"success": True, "message": "Статус категорії оновлено"}
@@ -694,25 +681,25 @@ def update_category_status(category_id: int, body: CategoryStatusUpdate, db: Ses
 @app.post("/api/categories/apply")
 def apply_category_changes(db: Session = Depends(get_db)):
     categories = db.query(Category).all()
-    inactive_cats = []
+    blocked_cats = []
     deleted_count = 0
     
     for cat in categories:
-        if not cat.is_active:
+        if cat.is_marked_for_deletion:
             model_count = db.query(ModelItem).filter(ModelItem.category_id == cat.id).count()
             if model_count > 0:
-                inactive_cats.append({"id": cat.id, "name": cat.name, "model_count": model_count})
+                blocked_cats.append({"id": cat.id, "name": cat.name, "model_count": model_count})
             else:
                 db.delete(cat)
                 deleted_count += 1
     
     db.commit()
     
-    if inactive_cats:
+    if blocked_cats:
         return {
             "success": False,
             "message": "Деякі категорії містять моделі і не можуть бути видалені",
-            "blocked_categories": inactive_cats
+            "blocked_categories": blocked_cats
         }
     
     return {"success": True, "message": f"Зміни застосовано. Видалено {deleted_count} порожніх категорій"}
@@ -751,3 +738,38 @@ def get_admin_stats(db: Session = Depends(get_db)):
         "cart_count": cart_count,
         "channel_stats": channel_stats
     }
+
+
+@app.post("/api/models/{model_id}/refresh-preview")
+async def refresh_model_preview(model_id: int, db: Session = Depends(get_db)):
+    item = db.query(ModelItem).filter(ModelItem.id == model_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Модель не знайдено")
+
+    channel = db.query(Channel).filter(Channel.id == item.channel_id).first()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Канал не знайдено")
+
+    client = await telegram_manager.get_client_for_account(db, channel.account_id) if channel.account_id else None
+
+    if not client or not await client.is_user_authorized():
+        return {"success": False, "message": "Telegram клієнт недоступний. Авторизуйте акаунт."}
+
+    try:
+        entity = await client.get_entity(channel.username or channel.telegram_id)
+        msg = await client.get_messages(entity, ids=item.telegram_message_id)
+        
+        if not msg or not msg.photo:
+            return {"success": False, "message": "Пост не містить фото"}
+
+        filename = f"preview_{channel.id}_{item.telegram_message_id}.jpg"
+        full_path = os.path.join(PREVIEWS_DIR, filename)
+        
+        await client.download_media(msg.photo, file=full_path)
+        item.preview_path = f"/previews/{filename}"
+        db.commit()
+
+        return {"success": True, "message": "Прев'ю оновлено", "preview_path": item.preview_path}
+
+    except Exception as e:
+        return {"success": False, "message": f"Помилка оновлення прев'ю: {str(e)}"}
