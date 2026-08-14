@@ -625,14 +625,6 @@ export default function App() {
           </button>
 
           <button 
-            className={`tab-btn ${activeTab === 'projects' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('projects'); fetchProjects(); }}
-          >
-            <FolderOpen size={18} />
-            <span>Проекти</span>
-          </button>
-
-          <button 
             className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
             onClick={() => { setActiveTab('sources'); fetchAccounts(); fetchChannels(); }}
           >
@@ -752,16 +744,25 @@ export default function App() {
                         <span>Немає проектів</span>
                       </li>
                     ) : (
-                      projects.map(proj => (
+                      <>
                         <li
-                          key={proj.id}
-                          className={`nav-item ${selectedProject?.id === proj.id && activeTab === 'projects' ? 'active' : ''}`}
-                          onClick={() => { setActiveTab('projects'); fetchProjectDetail(proj.id); }}
+                          className={`nav-item ${activeTab === 'projects' && !selectedProject ? 'active' : ''}`}
+                          onClick={() => { setActiveTab('projects'); setSelectedProject(null); fetchProjects(); }}
                         >
-                          <span>{proj.name}</span>
-                          <span className="badge-count">{proj.item_count}</span>
+                          <FolderOpen size={14} />
+                          <span>Всі проекти</span>
                         </li>
-                      ))
+                        {projects.map(proj => (
+                          <li
+                            key={proj.id}
+                            className={`nav-item ${selectedProject?.id === proj.id && activeTab === 'projects' ? 'active' : ''}`}
+                            onClick={() => { setActiveTab('projects'); fetchProjectDetail(proj.id); }}
+                          >
+                            <span>{proj.name}</span>
+                            <span className="badge-count">{proj.item_count}</span>
+                          </li>
+                        ))}
+                      </>
                     )}
                   </ul>
                 )}

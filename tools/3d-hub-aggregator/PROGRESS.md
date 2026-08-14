@@ -12,3 +12,8 @@ PROGRESS — 3d-hub-aggregator
 Зроблено: Виправлення: видалено DELETE /api/categories/{id} (порушення ANCHOR.md), додано endpoint POST /api/models/{id}/refresh-preview, перенесено backend/ і frontend/ в tools/3d-hub-aggregator/, повернуто AGENTS.md до оригіналу, зроблено сайдбар категорій та проектів згортними, перенесено кнопку "Налаштувати" ближче до списку, виправлено цикл перемикання статусу категорії (3 стани: нейтральний/зелений/червоний).
 Файли / commit: tools/3d-hub-aggregator/backend/main.py, tools/3d-aggregator/backend/database.py, tools/3d-hub-aggregator/frontend/src/App.jsx, tools/3d-hub-aggregator/frontend/src/index.css, tools/3d-hub-aggregator/ANCHOR.md, tools/3d-hub-aggregator/PROGRESS.md
 <!-- Записи агентів додаються нижче цього рядка -->
+
+Дата: 14.08.2026
+Агент: opencode
+Зроблено: Виправлено дублювання розділу "Проекти": прибрано пункт з топ-меню (Каталог/Джерела/Статистика), додано "Всі проекти" в сайдбар під заголовком секції з FolderOpen іконкою. Тепер Проекти доступні тільки через лівий сайдбар.
+Файли / commit: tools/3d-hub-aggregator/frontend/src/App.jsx, tools/3d-hub-aggregator/PROGRESS.md
