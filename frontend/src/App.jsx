@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react'
 import { 
   Box, Search, RefreshCw, ExternalLink, Plus, Settings, 
   Trash2, Edit2, Eye, EyeOff, ArrowUp, ArrowDown, Radio, CheckCircle, 
-  AlertCircle, ShieldCheck, Layers, RadioTower, Check, X
+  AlertCircle, ShieldCheck, Layers, RadioTower, Check, X, ShoppingCart,
+  FolderOpen, BarChart3, Clock, Zap
 } from 'lucide-react'
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('catalog') // 'catalog' | 'sources'
+  const [activeTab, setActiveTab] = useState('catalog')
   
   // Catalog State
   const [models, setModels] = useState([])
@@ -16,6 +17,8 @@ export default function App() {
   const [totalModels, setTotalModels] = useState(0)
   const [loadingModels, setLoadingModels] = useState(false)
   const [selectedModel, setSelectedModel] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
 
   // Sources State
   const [accounts, setAccounts] = useState([])
@@ -23,17 +26,33 @@ export default function App() {
   const [syncingChannelId, setSyncingChannelId] = useState(null)
   const [globalSyncMsg, setGlobalSyncMsg] = useState('')
 
+  // Cart State
+  const [cartItems, setCartItems] = useState([])
+  const [cartCount, setCartCount] = useState(0)
+
+  // Projects State
+  const [projects, setProjects] = useState([])
+  const [selectedProject, setSelectedProject] = useState(null)
+  const [projectModels, setProjectModels] = useState([])
+
+  // Admin State
+  const [adminStats, setAdminStats] = useState(null)
+
   // Modals
   const [showCatManagerModal, setShowCatManagerModal] = useState(false)
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showAddChannelModal, setShowAddChannelModal] = useState(false)
+  const [showCartModal, setShowCartModal] = useState(false)
+  const [showSaveToProjectModal, setShowSaveToProjectModal] = useState(false)
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false)
 
   // Forms State
   const [newCatName, setNewCatName] = useState('')
+  const [catStatuses, setCatStatuses] = useState({})
 
   // Account Form
   const [accForm, setAccForm] = useState({ name: 'Основний акаунт', api_id: '', api_hash: '', phone_number: '' })
-  const [accStep, setAccStep] = useState('config') // 'config' | 'code'
+  const [accStep, setAccStep] = useState('config')
   const [accCreatedId, setAccCreatedId] = useState(null)
   const [accCode, setAccCode] = useState('')
   const [accMsg, setAccMsg] = useState('')
@@ -41,17 +60,25 @@ export default function App() {
   // Channel Form
   const [chForm, setChForm] = useState({ telegram_id: '', title: '', account_id: '' })
 
+  // Project Form
+  const [newProjectName, setNewProjectName] = useState('')
+  const [selectedModelsForProject, setSelectedModelsForProject] = useState([])
+
   useEffect(() => {
     fetchUserCategories()
     fetchAccounts()
     fetchChannels()
+    fetchCart()
+    fetchProjects()
   }, [])
 
   useEffect(() => {
     if (activeTab === 'catalog') {
       fetchModels()
+    } else if (activeTab === 'admin') {
+      fetchAdminStats()
     }
-  }, [activeTab, selectedCategory, searchQuery])
+  }, [activeTab, selectedCategory, searchQuery, currentPage])
 
   // --- API CALLS ---
 
@@ -61,11 +88,14 @@ export default function App() {
       const params = new URLSearchParams()
       if (searchQuery) params.append('search', searchQuery)
       if (selectedCategory) params.append('category_id', selectedCategory)
+      params.append('page', currentPage)
+      params.append('limit', '24')
 
       const res = await fetch(`/api/models?${params.toString()}`)
       const data = await res.json()
       setModels(data.items || [])
       setTotalModels(data.total || 0)
+      setTotalPages(data.pages || 1)
     } catch (err) {
       console.error('Error fetching models:', err)
     } finally {
@@ -78,6 +108,9 @@ export default function App() {
       const res = await fetch(`/api/categories?visible_only=${all ? 'false' : 'true'}`)
       const data = await res.json()
       setCategories(data)
+      const statuses = {}
+      data.forEach(c => { statuses[c.id] = { active: c.is_active !== false, visible: c.is_visible !== false } })
+      setCatStatuses(statuses)
     } catch (err) {
       console.error('Error fetching categories:', err)
     }
@@ -103,7 +136,153 @@ export default function App() {
     }
   }
 
+  const fetchCart = async () => {
+    try {
+      const res = await fetch('/api/cart')
+      const data = await res.json()
+      setCartItems(data.items || [])
+      setCartCount(data.count || 0)
+    } catch (err) {
+      console.error('Error fetching cart:', err)
+    }
+  }
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch('/api/projects')
+      const data = await res.json()
+      setProjects(data)
+    } catch (err) {
+      console.error('Error fetching projects:', err)
+    }
+  }
+
+  const fetchProjectDetail = async (projectId) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}`)
+      const data = await res.json()
+      setProjectModels(data.models || [])
+      setSelectedProject(data)
+    } catch (err) {
+      console.error('Error fetching project:', err)
+    }
+  }
+
+  const fetchAdminStats = async () => {
+    try {
+      const res = await fetch('/api/admin/stats')
+      const data = await res.json()
+      setAdminStats(data)
+    } catch (err) {
+      console.error('Error fetching admin stats:', err)
+    }
+  }
+
   // --- HANDLERS ---
+
+  const handleAddToCart = async (modelId) => {
+    try {
+      const res = await fetch('/api/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model_id: modelId })
+      })
+      const data = await res.json()
+      if (data.success) {
+        fetchCart()
+        setGlobalSyncMsg(data.message)
+        setTimeout(() => setGlobalSyncMsg(''), 2000)
+      }
+    } catch (err) {
+      console.error('Error adding to cart:', err)
+    }
+  }
+
+  const handleRemoveFromCart = async (cartItemId) => {
+    try {
+      await fetch(`/api/cart/${cartItemId}`, { method: 'DELETE' })
+      fetchCart()
+    } catch (err) {
+      console.error('Error removing from cart:', err)
+    }
+  }
+
+  const handleClearCart = async () => {
+    if (!window.confirm('Очистити кошик?')) return
+    try {
+      await fetch('/api/cart', { method: 'DELETE' })
+      fetchCart()
+    } catch (err) {
+      console.error('Error clearing cart:', err)
+    }
+  }
+
+  const handleSaveToProject = async () => {
+    if (selectedModelsForProject.length === 0) return
+    try {
+      const res = await fetch('/api/cart/save-to-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: selectedProject?.id || null,
+          project_name: newProjectName || null,
+          model_ids: selectedModelsForProject
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        fetchCart()
+        fetchProjects()
+        setShowSaveToProjectModal(false)
+        setSelectedModelsForProject([])
+        setNewProjectName('')
+        setGlobalSyncMsg(data.message)
+        setTimeout(() => setGlobalSyncMsg(''), 3000)
+      }
+    } catch (err) {
+      console.error('Error saving to project:', err)
+    }
+  }
+
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newProjectName })
+      })
+      const data = await res.json()
+      if (data.id) {
+        fetchProjects()
+        setShowNewProjectModal(false)
+        setNewProjectName('')
+      }
+    } catch (err) {
+      console.error('Error creating project:', err)
+    }
+  }
+
+  const handleDeleteProject = async (projectId) => {
+    if (!window.confirm('Видалити цей проект?')) return
+    try {
+      await fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+      fetchProjects()
+      setSelectedProject(null)
+      setProjectModels([])
+    } catch (err) {
+      console.error('Error deleting project:', err)
+    }
+  }
+
+  const handleRemoveFromProject = async (projectId, modelId) => {
+    try {
+      await fetch(`/api/projects/${projectId}/models/${modelId}`, { method: 'DELETE' })
+      fetchProjectDetail(projectId)
+    } catch (err) {
+      console.error('Error removing from project:', err)
+    }
+  }
 
   const handleSyncChannel = async (channelId) => {
     setSyncingChannelId(channelId)
@@ -253,16 +432,41 @@ export default function App() {
 
   // --- CATEGORIES MANAGEMENT HANDLERS ---
 
-  const handleToggleCategoryVisibility = async (catId, currentVal) => {
+  const handleToggleCategoryStatus = async (catId, type) => {
+    const current = catStatuses[catId] || { active: true, visible: true }
+    const newVal = type === 'active' ? !current.active : !current.visible
+    
     try {
-      await fetch(`/api/categories/${catId}`, {
+      await fetch(`/api/categories/${catId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_visible: !currentVal })
+        body: JSON.stringify({ [type]: newVal })
       })
-      fetchUserCategories(true)
+      setCatStatuses(prev => ({
+        ...prev,
+        [catId]: { ...prev[catId], [type]: newVal }
+      }))
     } catch (err) {
-      console.error('Error toggling visibility:', err)
+      console.error('Error updating category status:', err)
+    }
+  }
+
+  const handleApplyCategoryChanges = async () => {
+    try {
+      const res = await fetch('/api/categories/apply', { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        fetchUserCategories(true)
+        setGlobalSyncMsg(data.message)
+      } else {
+        setGlobalSyncMsg(data.message)
+        if (data.blocked_categories) {
+          console.log('Blocked:', data.blocked_categories)
+        }
+      }
+      setTimeout(() => setGlobalSyncMsg(''), 4000)
+    } catch (err) {
+      console.error('Error applying changes:', err)
     }
   }
 
@@ -279,7 +483,6 @@ export default function App() {
 
     setCategories(newCats)
     
-    // Save reorder to backend
     const ids = newCats.map(c => c.id)
     try {
       await fetch('/api/categories/reorder', {
@@ -335,6 +538,29 @@ export default function App() {
     }
   }
 
+  const handleDeleteModel = async (modelId) => {
+    if (!window.confirm('Видалити цю модель?')) return
+    try {
+      await fetch(`/api/models/${modelId}`, { method: 'DELETE' })
+      fetchModels()
+      setSelectedModel(null)
+    } catch (err) {
+      console.error('Error deleting model:', err)
+    }
+  }
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'queued': return '🟡 У черзі'
+      case 'backlog': return '🔵 Backlog'
+      case 'monitoring': return '🟢 Monitoring'
+      case 'up_to_date': return '🟢 Актуальний'
+      case 'error': return '🔴 Помилка'
+      case 'disabled': return '⚪ Вимкнено'
+      default: return '⚪ Idle'
+    }
+  }
+
   return (
     <div className="app-container">
       {/* HEADER */}
@@ -353,10 +579,18 @@ export default function App() {
         <div className="nav-tabs">
           <button 
             className={`tab-btn ${activeTab === 'catalog' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('catalog'); fetchUserCategories(); }}
+            onClick={() => { setActiveTab('catalog'); setCurrentPage(1); fetchUserCategories(); }}
           >
             <Box size={18} />
-            <span>Каталог моделей</span>
+            <span>Каталог</span>
+          </button>
+
+          <button 
+            className={`tab-btn ${activeTab === 'projects' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('projects'); fetchProjects(); }}
+          >
+            <FolderOpen size={18} />
+            <span>Проекти</span>
           </button>
 
           <button 
@@ -364,28 +598,41 @@ export default function App() {
             onClick={() => { setActiveTab('sources'); fetchAccounts(); fetchChannels(); }}
           >
             <RadioTower size={18} />
-            <span>Джерела Telegram</span>
+            <span>Джерела</span>
+          </button>
+
+          <button 
+            className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('admin'); fetchAdminStats(); }}
+          >
+            <BarChart3 size={18} />
+            <span>Статистика</span>
           </button>
         </div>
 
-        {/* SEARCH & ACTIONS */}
-        {activeTab === 'catalog' ? (
-          <div className="search-box">
-            <Search className="search-icon" />
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Пошук моделей..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        ) : (
-          <button className="btn btn-primary" onClick={() => setShowAddChannelModal(true)}>
-            <Plus size={18} />
-            <span>Додати канал</span>
+        {/* CART & SEARCH */}
+        <div className="header-right">
+          {activeTab === 'catalog' && (
+            <div className="search-box">
+              <Search className="search-icon" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Пошук моделей..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              />
+            </div>
+          )}
+          
+          <button 
+            className="cart-btn"
+            onClick={() => setShowCartModal(true)}
+          >
+            <ShoppingCart size={20} />
+            {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
           </button>
-        )}
+        </div>
       </header>
 
       {/* SYNC TOAST */}
@@ -401,7 +648,7 @@ export default function App() {
       {/* MAIN CONTENT AREA */}
       {activeTab === 'catalog' ? (
         <div className="main-layout">
-          {/* USER CUSTOMIZABLE SIDEBAR */}
+          {/* SIDEBAR */}
           <aside className="sidebar">
             <div>
               <div className="sidebar-title">Мої Категорії</div>
@@ -409,7 +656,7 @@ export default function App() {
               <ul className="nav-list">
                 <li 
                   className={`nav-item ${selectedCategory === null ? 'active' : ''}`}
-                  onClick={() => setSelectedCategory(null)}
+                  onClick={() => { setSelectedCategory(null); setCurrentPage(1); }}
                 >
                   <span>Усі категорії</span>
                   <span className="badge-count">{totalModels}</span>
@@ -419,7 +666,7 @@ export default function App() {
                   <li
                     key={cat.id}
                     className={`nav-item ${selectedCategory === cat.id ? 'active' : ''}`}
-                    onClick={() => setSelectedCategory(cat.id)}
+                    onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}
                   >
                     <span>{cat.name}</span>
                     <span className="badge-count">{cat.count}</span>
@@ -428,7 +675,6 @@ export default function App() {
               </ul>
             </div>
 
-            {/* CONFIGURE CATEGORIES BUTTON */}
             <button 
               className="btn btn-secondary" 
               style={{ width: '100%', marginTop: 24, justifyContent: 'center' }}
@@ -443,7 +689,7 @@ export default function App() {
           <main className="content-area">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
-                Каталог моделей <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>({models.length})</span>
+                Каталог моделей <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>({totalModels})</span>
               </h2>
             </div>
 
@@ -456,62 +702,179 @@ export default function App() {
               <div className="empty-state">
                 <Box size={48} />
                 <h3>Моделей не знайдено</h3>
-                <p>Спробуйте обрати іншу категорію або додайте нові канали у розділі «Джерела Telegram»</p>
+                <p>Спробуйте обрати іншу категорію або додайте нові канали у розділі «Джерела»</p>
               </div>
             ) : (
-              <div className="models-grid">
-                {models.map(model => (
-                  <div 
-                    key={model.id} 
-                    className="model-card"
-                    onClick={() => setSelectedModel(model)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="card-media">
-                      <img 
-                        src={model.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} 
-                        alt={model.title} 
-                        className="card-img" 
-                      />
-                      <div className="card-badge">{model.category_name}</div>
-                    </div>
+              <>
+                <div className="models-grid">
+                  {models.map(model => (
+                    <div 
+                      key={model.id} 
+                      className="model-card"
+                      onClick={() => setSelectedModel(model)}
+                    >
+                      <div className="card-media">
+                        <img 
+                          src={model.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} 
+                          alt={model.title} 
+                          className="card-img" 
+                        />
+                        <div className="card-badge">{model.category_name}</div>
+                      </div>
 
-                    <div className="card-body">
-                      <h3 className="card-title">{model.title}</h3>
+                      <div className="card-body">
+                        <h3 className="card-title">{model.title}</h3>
 
-                      {(model.file_formats?.length > 0 || model.render_engines?.length > 0 || model.archive_types?.length > 0) && (
-                        <div className="card-tags">
-                          {model.file_formats?.map(f => (
-                            <span key={`fmt-${f}`} className="meta-tag meta-tag-format">{f}</span>
-                          ))}
-                          {model.render_engines?.map(r => (
-                            <span key={`ren-${r}`} className="meta-tag meta-tag-render">{r}</span>
-                          ))}
-                          {model.archive_types?.map(a => (
-                            <span key={`arc-${a}`} className="meta-tag meta-tag-archive">{a}</span>
-                          ))}
+                        {(model.file_formats?.length > 0 || model.render_engines?.length > 0 || model.archive_types?.length > 0) && (
+                          <div className="card-tags">
+                            {model.file_formats?.map(f => (
+                              <span key={`fmt-${f}`} className="meta-tag meta-tag-format">{f}</span>
+                            ))}
+                            {model.render_engines?.map(r => (
+                              <span key={`ren-${r}`} className="meta-tag meta-tag-render">{r}</span>
+                            ))}
+                            {model.archive_types?.map(a => (
+                              <span key={`arc-${a}`} className="meta-tag meta-tag-archive">{a}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="card-footer">
+                          <span className="channel-badge">{model.channel_title}</span>
+                          <button 
+                            className="btn btn-primary btn-sm"
+                            onClick={(e) => { e.stopPropagation(); handleAddToCart(model.id); }}
+                          >
+                            <ShoppingCart size={14} />
+                          </button>
                         </div>
-                      )}
-
-                      <div className="card-footer" onClick={e => e.stopPropagation()}>
-                        <span className="channel-badge">{model.channel_title}</span>
-                        <a 
-                          href={model.telegram_post_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="btn-tg-link"
-                        >
-                          В Telegram ↗
-                        </a>
                       </div>
                     </div>
+                  ))}
+                </div>
+
+                {/* PAGINATION */}
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button 
+                      className="btn btn-secondary btn-sm"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => p - 1)}
+                    >
+                      Попередня
+                    </button>
+                    <span className="page-info">
+                      Сторінка {currentPage} з {totalPages}
+                    </span>
+                    <button 
+                      className="btn btn-secondary btn-sm"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(p => p + 1)}
+                    >
+                      Наступна
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </main>
         </div>
-      ) : (
+      ) : activeTab === 'projects' ? (
+        /* PROJECTS VIEW */
+        <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+          <div className="sources-container">
+            <div className="sources-section">
+              <div className="section-header">
+                <div className="section-title">
+                  <FolderOpen className="text-primary" size={22} />
+                  <span>Мої проекти</span>
+                </div>
+                <button className="btn btn-primary" onClick={() => setShowNewProjectModal(true)}>
+                  <Plus size={16} />
+                  <span>Новий проект</span>
+                </button>
+              </div>
+
+              {projects.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Немає проектів. Створіть перший проект.</p>
+              ) : (
+                <div className="projects-grid">
+                  {projects.map(proj => (
+                    <div 
+                      key={proj.id} 
+                      className={`project-card ${selectedProject?.id === proj.id ? 'selected' : ''}`}
+                      onClick={() => fetchProjectDetail(proj.id)}
+                    >
+                      <div className="project-header">
+                        <span className="project-name">{proj.name}</span>
+                        <button 
+                          className="btn btn-danger btn-sm"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteProject(proj.id); }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="project-meta">
+                        <span>{proj.item_count} моделей</span>
+                        <span>{new Date(proj.created_at).toLocaleDateString('uk-UA')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* PROJECT DETAIL */}
+            {selectedProject && (
+              <div className="sources-section">
+                <div className="section-header">
+                  <div className="section-title">
+                    <Layers className="text-cyan" size={22} />
+                    <span>{selectedProject.name}</span>
+                  </div>
+                </div>
+
+                {projectModels.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Проект порожній. Додайте моделі з кошика.</p>
+                ) : (
+                  <div className="models-grid">
+                    {projectModels.map(model => (
+                      <div key={model.id} className="model-card">
+                        <div className="card-media">
+                          <img 
+                            src={model.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} 
+                            alt={model.title} 
+                            className="card-img" 
+                          />
+                        </div>
+                        <div className="card-body">
+                          <h3 className="card-title">{model.title}</h3>
+                          <div className="card-footer">
+                            <a 
+                              href={model.telegram_post_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="btn-tg-link"
+                            >
+                              Завантажити ↗
+                            </a>
+                            <button 
+                              className="btn btn-danger btn-sm"
+                              onClick={() => handleRemoveFromProject(selectedProject.id, model.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </main>
+      ) : activeTab === 'sources' ? (
         /* TELEGRAM SOURCES MANAGEMENT VIEW */
         <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
           <div className="sources-container">
@@ -537,7 +900,7 @@ export default function App() {
                       <div className="account-header">
                         <span className="account-name">{acc.name}</span>
                         <span className={`status-pill ${acc.is_authorized ? 'active' : 'idle'}`}>
-                          {acc.is_authorized ? '🟢 З\'єднано' : '⚪ Не авторизовано'}
+                          {acc.is_authorized ? "🟢 З'єднано" : "⚪ Не авторизовано"}
                         </span>
                       </div>
                       
@@ -582,6 +945,7 @@ export default function App() {
                       <th>Назва каналу</th>
                       <th>Прив'язаний акаунт</th>
                       <th>Статус</th>
+                      <th>Прогрес</th>
                       <th>Останнє оновлення</th>
                       <th>Моделей</th>
                       <th>Моніторинг</th>
@@ -614,16 +978,27 @@ export default function App() {
 
                         <td>
                           <span className={`status-pill ${
-                            ch.status === 'initial_scan' ? 'idle' : 
-                            ch.status === 'syncing' ? 'idle' : 
-                            ch.status === 'up_to_date' || ch.status === 'active' ? 'active' : 
+                            ch.status === 'queued' ? 'idle' :
+                            ch.status === 'backlog' ? 'idle' : 
+                            ch.status === 'monitoring' || ch.status === 'up_to_date' ? 'active' : 
                             ch.status === 'error' ? 'error' : 'idle'
                           }`}>
-                            {ch.status === 'initial_scan' ? '🔵 Initial Scan' : 
-                             ch.status === 'syncing' ? '🟡 Syncing' : 
-                             ch.status === 'up_to_date' || ch.status === 'active' ? '🟢 Up to Date' : 
-                             ch.status === 'error' ? '🔴 Error' : '⚪ Idle'}
+                            {getStatusLabel(ch.status)}
                           </span>
+                        </td>
+
+                        <td>
+                          {ch.total_posts > 0 && (
+                            <div className="progress-bar">
+                              <div 
+                                className="progress-fill" 
+                                style={{ width: `${Math.round((ch.processed_count / ch.total_posts) * 100)}%` }}
+                              />
+                              <span className="progress-text">
+                                {Math.round((ch.processed_count / ch.total_posts) * 100)}%
+                              </span>
+                            </div>
+                          )}
                         </td>
 
                         <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
@@ -669,14 +1044,265 @@ export default function App() {
             </div>
           </div>
         </main>
+      ) : (
+        /* ADMIN DASHBOARD VIEW */
+        <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+          <div className="sources-container">
+            <div className="section-header">
+              <div className="section-title">
+                <BarChart3 className="text-primary" size={22} />
+                <span>Статистика системи</span>
+              </div>
+              <button className="btn btn-secondary" onClick={fetchAdminStats}>
+                <RefreshCw size={16} />
+                <span>Оновити</span>
+              </button>
+            </div>
+
+            {adminStats && (
+              <>
+                <div className="stats-grid">
+                  <div className="stat-card">
+                    <Layers size={24} className="text-primary" />
+                    <div className="stat-value">{adminStats.total_models}</div>
+                    <div className="stat-label">Моделей</div>
+                  </div>
+                  <div className="stat-card">
+                    <RadioTower size={24} className="text-cyan" />
+                    <div className="stat-value">{adminStats.active_channels} / {adminStats.total_channels}</div>
+                    <div className="stat-label">Активних каналів</div>
+                  </div>
+                  <div className="stat-card">
+                    <FolderOpen size={24} className="text-emerald" />
+                    <div className="stat-value">{adminStats.total_projects}</div>
+                    <div className="stat-label">Проектів</div>
+                  </div>
+                  <div className="stat-card">
+                    <ShoppingCart size={24} className="text-amber" />
+                    <div className="stat-value">{adminStats.cart_count}</div>
+                    <div className="stat-label">У кошику</div>
+                  </div>
+                </div>
+
+                <div className="sources-section">
+                  <div className="section-title" style={{ marginBottom: 16 }}>
+                    <Clock size={18} />
+                    <span>Статус каналів</span>
+                  </div>
+                  
+                  <table className="channels-table">
+                    <thead>
+                      <tr>
+                        <th>Канал</th>
+                        <th>Статус</th>
+                        <th>Режим</th>
+                        <th>Прогрес</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminStats.channel_stats.map(ch => (
+                        <tr key={ch.id}>
+                          <td style={{ fontWeight: 600 }}>{ch.title}</td>
+                          <td>
+                            <span className={`status-pill ${
+                              ch.status === 'queued' ? 'idle' :
+                              ch.status === 'backlog' ? 'idle' : 
+                              ch.status === 'monitoring' || ch.status === 'up_to_date' ? 'active' : 
+                              ch.status === 'error' ? 'error' : 'idle'
+                            }`}>
+                              {getStatusLabel(ch.status)}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {ch.scan_mode || 'idle'}
+                          </td>
+                          <td>
+                            {ch.total_posts > 0 ? (
+                              <div className="progress-bar">
+                                <div 
+                                  className="progress-fill" 
+                                  style={{ width: `${Math.round((ch.processed_count / ch.total_posts) * 100)}%` }}
+                                />
+                                <span className="progress-text">
+                                  {ch.processed_count} / {ch.total_posts}
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                {ch.processed_count} моделей
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </main>
       )}
 
-      {/* MODAL 1: CATEGORIES MANAGER (USER CONTROLLED) */}
-      {showCatManagerModal && (
-        <div className="modal-overlay" onClick={() => setShowCatManagerModal(false)}>
+      {/* MODAL: CART */}
+      {showCartModal && (
+        <div className="modal-overlay" onClick={() => setShowCartModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">
+                <ShoppingCart size={20} style={{ marginRight: 8 }} />
+                Кошик ({cartCount})
+              </h2>
+              <button className="btn-close" onClick={() => setShowCartModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {cartItems.length === 0 ? (
+              <div className="empty-state" style={{ padding: 40 }}>
+                <ShoppingCart size={48} />
+                <p>Кошик порожній</p>
+              </div>
+            ) : (
+              <>
+                <div className="cart-grid">
+                  {cartItems.map(item => (
+                    <div key={item.id} className="cart-item">
+                      <img 
+                        src={item.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80'} 
+                        alt={item.title}
+                        className="cart-item-img"
+                      />
+                      <div className="cart-item-info">
+                        <span className="cart-item-title">{item.title}</span>
+                        <span className="cart-item-cat">{item.category_name}</span>
+                      </div>
+                      <button 
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleRemoveFromCart(item.id)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="cart-actions">
+                  <button className="btn btn-danger" onClick={handleClearCart}>
+                    <Trash2 size={16} />
+                    <span>Очистити кошик</span>
+                  </button>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => { setShowSaveToProjectModal(true); fetchProjects(); }}
+                  >
+                    <FolderOpen size={16} />
+                    <span>Зберегти у проект</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SAVE TO PROJECT */}
+      {showSaveToProjectModal && (
+        <div className="modal-overlay" onClick={() => setShowSaveToProjectModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">Налаштування моєї панелі категорій</h2>
+              <h2 className="modal-title">Зберегти у проект</h2>
+              <button className="btn-close" onClick={() => setShowSaveToProjectModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Оберіть проект або створіть новий:</label>
+              
+              <div className="project-select-list">
+                {projects.map(proj => (
+                  <div 
+                    key={proj.id}
+                    className={`project-select-item ${selectedProject?.id === proj.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedProject(proj)}
+                  >
+                    <FolderOpen size={16} />
+                    <span>{proj.name}</span>
+                    {selectedProject?.id === proj.id && <Check size={16} className="text-primary" />}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <label className="form-label">Або створити новий проект:</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Назва нового проекту..."
+                  value={newProjectName}
+                  onChange={e => setNewProjectName(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
+              <button className="btn btn-secondary" onClick={() => setShowSaveToProjectModal(false)}>
+                Скасувати
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={handleSaveToProject}
+                disabled={!selectedProject && !newProjectName}
+              >
+                Зберегти ({selectedModelsForProject.length || cartCount} моделей)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NEW PROJECT */}
+      {showNewProjectModal && (
+        <div className="modal-overlay" onClick={() => setShowNewProjectModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Новий проект</h2>
+              <button className="btn-close" onClick={() => setShowNewProjectModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Назва проекту:</label>
+              <input 
+                type="text" 
+                className="form-input" 
+                placeholder="Введіть назву..."
+                value={newProjectName}
+                onChange={e => setNewProjectName(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
+              <button className="btn btn-secondary" onClick={() => setShowNewProjectModal(false)}>
+                Скасувати
+              </button>
+              <button className="btn btn-primary" onClick={handleCreateProject}>
+                Створити
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CATEGORIES MANAGER */}
+      {showCatManagerModal && (
+        <div className="modal-overlay" onClick={() => setShowCatManagerModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Налаштування категорій</h2>
               <button className="btn-close" onClick={() => setShowCatManagerModal(false)}>
                 <X size={20} />
               </button>
@@ -692,23 +1318,33 @@ export default function App() {
               />
               <button type="submit" className="btn btn-primary" style={{ flexShrink: 0 }}>
                 <Plus size={16} />
-                <span>Створити</span>
               </button>
             </form>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="cat-legend">
+              <span><span className="cat-dot green"></span> Активна для класифікатора</span>
+              <span><span className="cat-dot red"></span> Позначена на видалення</span>
+              <span><span className="cat-dot neutral"></span> Нейтральна</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
               {categories.map((cat, idx) => (
                 <div key={cat.id} className="cat-manage-item">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <button 
                       type="button"
-                      className="btn-close" 
-                      onClick={() => handleToggleCategoryVisibility(cat.id, cat.is_visible)}
-                      title={cat.is_visible ? "Приховати з моєї панелі" : "Показувати в моїй панелі"}
+                      className={`cat-status-btn ${catStatuses[cat.id]?.active ? 'green' : cat.is_custom ? 'red' : 'neutral'}`}
+                      onClick={() => handleToggleCategoryStatus(cat.id, 'active')}
+                      title={catStatuses[cat.id]?.active ? 'Деактивувати для класифікатора' : 'Активувати для класифікатора'}
                     >
-                      {cat.is_visible ? <Eye size={18} className="text-primary" /> : <EyeOff size={18} style={{ opacity: 0.4 }} />}
+                      {catStatuses[cat.id]?.active ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
                     </button>
-                    <span style={{ fontWeight: 600, opacity: cat.is_visible ? 1 : 0.4 }}>{cat.name}</span>
+                    <span style={{ 
+                      fontWeight: 600, 
+                      opacity: catStatuses[cat.id]?.visible !== false ? 1 : 0.4 
+                    }}>
+                      {cat.name}
+                    </span>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -743,7 +1379,10 @@ export default function App() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
+              <button className="btn btn-secondary" onClick={handleApplyCategoryChanges}>
+                Застосувати зміни
+              </button>
               <button className="btn btn-primary" onClick={() => { fetchUserCategories(); setShowCatManagerModal(false); }}>
                 Готово
               </button>
@@ -752,7 +1391,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL 2: ADD TELEGRAM ACCOUNT */}
+      {/* MODAL: ADD TELEGRAM ACCOUNT */}
       {showAddAccountModal && (
         <div className="modal-overlay" onClick={() => setShowAddAccountModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -776,7 +1415,7 @@ export default function App() {
             {accStep === 'config' ? (
               <form onSubmit={handleAddAccountSubmit}>
                 <div className="form-group">
-                  <label className="form-label">Назва акаунту (для вас):</label>
+                  <label className="form-label">Назва акаунту:</label>
                   <input 
                     type="text" 
                     className="form-input" 
@@ -808,7 +1447,7 @@ export default function App() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Номер телефону (з кодом країни):</label>
+                  <label className="form-label">Номер телефону:</label>
                   <input 
                     type="text" 
                     className="form-input" 
@@ -855,12 +1494,12 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL 3: ADD TELEGRAM CHANNEL */}
+      {/* MODAL: ADD TELEGRAM CHANNEL */}
       {showAddChannelModal && (
         <div className="modal-overlay" onClick={() => setShowAddChannelModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">Додати Telegram-канал для моніторингу</h2>
+              <h2 className="modal-title">Додати Telegram-канал</h2>
               <button className="btn-close" onClick={() => setShowAddChannelModal(false)}>
                 <X size={20} />
               </button>
@@ -868,7 +1507,7 @@ export default function App() {
 
             <form onSubmit={handleAddChannelSubmit}>
               <div className="form-group">
-                <label className="form-label">Username або посилання каналу:</label>
+                <label className="form-label">Username або посилання:</label>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -891,13 +1530,13 @@ export default function App() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Прив'язати до Telegram-акаунту:</label>
+                <label className="form-label">Прив'язати до акаунту:</label>
                 <select 
                   className="form-select"
                   value={chForm.account_id}
                   onChange={e => setChForm({ ...chForm, account_id: e.target.value })}
                 >
-                  <option value="">Автоматично (Основний акаунт)</option>
+                  <option value="">Автоматично</option>
                   {accounts.map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.name}</option>
                   ))}
@@ -917,7 +1556,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL 4: MODEL DETAIL & CATEGORY MOVE */}
+      {/* MODAL: MODEL DETAIL */}
       {selectedModel && (
         <div className="modal-overlay" onClick={() => setSelectedModel(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 680 }}>
@@ -978,18 +1617,31 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20, alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                Джерело: {selectedModel.channel_title}
-              </span>
-              <a 
-                href={selectedModel.telegram_post_url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="btn btn-primary"
+              <button 
+                className="btn btn-danger btn-sm"
+                onClick={() => handleDeleteModel(selectedModel.id)}
               >
-                <ExternalLink size={16} />
-                <span>Відкрити пост в Telegram</span>
-              </a>
+                <Trash2 size={14} />
+                <span>Видалити модель</span>
+              </button>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button 
+                  className="btn btn-primary btn-sm"
+                  onClick={() => { handleAddToCart(selectedModel.id); setSelectedModel(null); }}
+                >
+                  <ShoppingCart size={14} />
+                  <span>Додати в кошик</span>
+                </button>
+                <a 
+                  href={selectedModel.telegram_post_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="btn btn-secondary"
+                >
+                  <ExternalLink size={16} />
+                  <span>В Telegram</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>

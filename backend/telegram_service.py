@@ -2,8 +2,10 @@ import os
 import asyncio
 import json
 import logging
+import random
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from collections import deque
 
 from sqlalchemy.orm import Session
 from database import DB_DIR, PREVIEWS_DIR, Category, Channel, ModelItem, TelegramAccount
@@ -24,10 +26,25 @@ except ImportError:
     AuthKeyUnregisteredError = Exception
 
 
+class ParseTask:
+    def __init__(self, channel_id: int, account_id: int, mode: str = "backlog"):
+        self.channel_id = channel_id
+        self.account_id = account_id
+        self.mode = mode  # 'backlog' or 'monitoring'
+        self.created_at = datetime.utcnow()
+
+
 class MultiAccountTelegramServiceManager:
     def __init__(self):
         self.clients: Dict[int, Any] = {}
         self.pending_auth: Dict[int, Dict[str, str]] = {}
+        self.parse_queue: deque = deque()
+        self.active_tasks: Dict[int, ParseTask] = {}
+        self.account_last_used: Dict[int, datetime] = {}
+        self.is_processing_queue = False
+        self.min_delay = 2.0
+        self.max_delay = 5.0
+        self.flood_cooldown = 300
 
     async def get_client_for_account(self, db: Session, account_id: int) -> Optional[Any]:
         if not TELETHON_AVAILABLE:
@@ -49,6 +66,60 @@ class MultiAccountTelegramServiceManager:
         except Exception as e:
             logger.error(f"Telegram client connection error for account {account_id}: {e}")
             return None
+
+    def _get_best_account(self, db: Session) -> Optional[int]:
+        accounts = db.query(TelegramAccount).filter(TelegramAccount.is_authorized == True).all()
+        if not accounts:
+            return None
+        
+        now = datetime.utcnow()
+        best_account = None
+        earliest_usage = None
+        
+        for acc in accounts:
+            last_used = self.account_last_used.get(acc.id)
+            if last_used is None:
+                return acc.id
+            if earliest_usage is None or last_used < earliest_usage:
+                earliest_usage = last_used
+                best_account = acc.id
+        
+        return best_account
+
+    def _get_random_delay(self) -> float:
+        return random.uniform(self.min_delay, self.max_delay)
+
+    async def _process_queue(self, db: Session):
+        if self.is_processing_queue:
+            return
+        
+        self.is_processing_queue = True
+        try:
+            while self.parse_queue:
+                task = self.parse_queue.popleft()
+                
+                if task.channel_id in self.active_tasks:
+                    continue
+                
+                self.active_tasks[task.channel_id] = task
+                
+                try:
+                    result = await self.sync_channel_posts(db, task.channel_id)
+                    if result.get("success"):
+                        channel = db.query(Channel).filter(Channel.id == task.channel_id).first()
+                        if channel:
+                            channel.scan_mode = task.mode
+                            db.commit()
+                except Exception as e:
+                    logger.error(f"Error processing task for channel {task.channel_id}: {e}")
+                finally:
+                    self.active_tasks.pop(task.channel_id, None)
+                    self.account_last_used[task.account_id] = datetime.utcnow()
+                
+                delay = self._get_random_delay()
+                await asyncio.sleep(delay)
+        finally:
+            self.is_processing_queue = False
 
     async def request_code(self, db: Session, account_id: int, phone_number: str) -> Dict[str, Any]:
         account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
@@ -105,9 +176,8 @@ class MultiAccountTelegramServiceManager:
 
         account_id = channel.account_id
         if not account_id:
-            first_acc = db.query(TelegramAccount).filter(TelegramAccount.is_authorized == True).first()
-            if first_acc:
-                account_id = first_acc.id
+            account_id = self._get_best_account(db)
+            if account_id:
                 channel.account_id = account_id
                 db.commit()
 
@@ -118,6 +188,7 @@ class MultiAccountTelegramServiceManager:
             added_count = seed_demo_data_if_needed(db, channel)
             channel.initial_scan_completed = True
             channel.status = "up_to_date"
+            channel.scan_mode = "monitoring"
             channel.status_message = "Актуальний (демо режим)"
             channel.last_synced_at = datetime.utcnow()
             channel.processed_count = db.query(ModelItem).filter(ModelItem.channel_id == channel.id).count()
@@ -130,38 +201,46 @@ class MultiAccountTelegramServiceManager:
 
         # Determine scan mode
         is_initial_scan = not channel.initial_scan_completed
+        scan_mode = "backlog" if is_initial_scan else "monitoring"
 
         if is_initial_scan:
-            channel.status = "initial_scan"
-            channel.status_message = "Первинне сканування повної історії каналу..."
+            channel.status = "backlog"
+            channel.scan_mode = "backlog"
+            channel.status_message = "Первинне сканування історії каналу..."
         else:
-            channel.status = "syncing"
-            channel.status_message = "Синхронізація нових постів..."
+            channel.status = "monitoring"
+            channel.scan_mode = "monitoring"
+            channel.status_message = "Моніторинг нових постів..."
         db.commit()
 
         new_items_count = 0
-        # Tracks the highest message ID seen — needed to set last_scanned_id
-        # iter_messages goes newest->oldest, so first message has the highest ID
         highest_msg_id = channel.last_scanned_id or 0
         batch_counter = 0
 
+        # Get total posts count for progress tracking
+        try:
+            entity = await client.get_entity(channel.username or channel.telegram_id)
+            if is_initial_scan:
+                total_posts = await client.get_count(entity)
+                channel.total_posts = total_posts
+                db.commit()
+        except Exception as e:
+            logger.warning(f"Could not get total posts count: {e}")
+
         # Build iter_messages kwargs:
-        #   Initial scan:  no min_id -> walks full history, newest to oldest
-        #   Incremental:   min_id = last_scanned_id -> only posts newer than last known
         iter_kwargs: Dict[str, Any] = {}
         if not is_initial_scan and channel.last_scanned_id:
             iter_kwargs["min_id"] = channel.last_scanned_id
 
         try:
             entity = await client.get_entity(channel.username or channel.telegram_id)
-            categories_by_slug = {c.slug: c.id for c in db.query(Category).all()}
+            categories_by_slug = {c.slug: c.id for c in db.query(Category).filter(Category.is_active == True).all()}
             other_cat_id = categories_by_slug.get("other", 1)
 
             async for msg in client.iter_messages(entity, **iter_kwargs):
                 if not msg or not msg.id:
                     continue
 
-                # Update highest_msg_id (first iteration = newest message = highest ID)
                 if msg.id > highest_msg_id:
                     highest_msg_id = msg.id
 
@@ -182,13 +261,12 @@ class MultiAccountTelegramServiceManager:
                 if existing:
                     continue
 
-                # Download preview image only — NEVER model archives
+                # Download preview image
                 preview_rel_path = None
                 if msg.photo:
                     filename = f"preview_{channel.id}_{msg.id}.jpg"
                     full_path = os.path.join(PREVIEWS_DIR, filename)
                     if os.path.exists(full_path):
-                        # Already cached from a previous sync run
                         preview_rel_path = f"/previews/{filename}"
                     else:
                         try:
@@ -197,7 +275,7 @@ class MultiAccountTelegramServiceManager:
                         except Exception as img_err:
                             logger.warning(f"Could not download photo for msg {msg.id}: {img_err}")
 
-                # Permanent source link to original Telegram post
+                # Permanent source link
                 if channel.username:
                     post_url = f"https://t.me/{channel.username}/{msg.id}"
                 else:
@@ -225,8 +303,7 @@ class MultiAccountTelegramServiceManager:
                 new_items_count += 1
                 batch_counter += 1
 
-                # Commit every 20 records + save progress checkpoint.
-                # Guarantees we lose at most 20 records if interrupted mid-scan.
+                # Commit every 20 records
                 if batch_counter >= 20:
                     if highest_msg_id > 0:
                         channel.last_scanned_id = highest_msg_id
@@ -235,12 +312,13 @@ class MultiAccountTelegramServiceManager:
                     )
                     db.commit()
                     batch_counter = 0
-                    # Brief pause — polite rate limiting
-                    await asyncio.sleep(0.15)
+                    # Anti-ban random delay
+                    await asyncio.sleep(self._get_random_delay())
 
             # --- Successful completion ---
             channel.initial_scan_completed = True
             channel.status = "up_to_date"
+            channel.scan_mode = "monitoring"
             channel.status_message = "Актуальний"
             channel.last_synced_at = datetime.utcnow()
             if highest_msg_id > 0:
@@ -258,7 +336,6 @@ class MultiAccountTelegramServiceManager:
             }
 
         except FloodWaitError as fw:
-            # Telegram rate-limited us. Save progress, do NOT retry or wait.
             wait_seconds = getattr(fw, 'seconds', 60)
             wait_minutes = round(wait_seconds / 60, 1)
 
@@ -271,7 +348,8 @@ class MultiAccountTelegramServiceManager:
                 )
 
             channel.status = "error"
-            channel.status_message = f"Telegram FloodWait: зачекайте ~{wait_minutes} хв. і синхронізуйте знову."
+            channel.scan_mode = "idle"
+            channel.status_message = f"FloodWait: зачекайте ~{wait_minutes} хв."
             channel.last_synced_at = datetime.utcnow()
             db.commit()
 
@@ -287,6 +365,7 @@ class MultiAccountTelegramServiceManager:
 
         except (UserDeactivatedBanError, AuthKeyUnregisteredError) as auth_err:
             channel.status = "error"
+            channel.scan_mode = "idle"
             channel.status_message = "Сесія Telegram недійсна. Переавторизуйте акаунт."
             db.commit()
             logger.error(f"Auth error on channel {channel.id}: {auth_err}")
@@ -296,7 +375,7 @@ class MultiAccountTelegramServiceManager:
             }
 
         except Exception as e:
-            # Unknown error — flush uncommitted batch before marking error
+            # Flush uncommitted batch before marking error
             if batch_counter > 0:
                 if highest_msg_id > 0:
                     channel.last_scanned_id = highest_msg_id
@@ -305,12 +384,40 @@ class MultiAccountTelegramServiceManager:
                 )
 
             channel.status = "error"
+            channel.scan_mode = "idle"
             channel.status_message = f"Помилка: {str(e)[:80]}"
             channel.last_synced_at = datetime.utcnow()
             db.commit()
 
             logger.error(f"Error scanning channel {channel.id}: {e}")
             return {"success": False, "message": f"Помилка сканування каналу: {str(e)}"}
+
+    async def queue_channel(self, db: Session, channel_id: int) -> Dict[str, Any]:
+        channel = db.query(Channel).filter(Channel.id == channel_id).first()
+        if not channel:
+            return {"success": False, "message": "Канал не знайдено"}
+        
+        if not channel.enabled:
+            return {"success": False, "message": "Канал вимкнено"}
+        
+        if channel_id in self.active_tasks:
+            return {"success": False, "message": "Канал вже в обробці"}
+        
+        account_id = channel.account_id or self._get_best_account(db)
+        if not account_id:
+            return {"success": False, "message": "Немає доступних акаунтів"}
+        
+        mode = "backlog" if not channel.initial_scan_completed else "monitoring"
+        task = ParseTask(channel_id=channel_id, account_id=account_id, mode=mode)
+        self.parse_queue.append(task)
+        
+        channel.status = "queued"
+        channel.status_message = "У черзі на обробку"
+        db.commit()
+        
+        asyncio.create_task(self._process_queue(db))
+        
+        return {"success": True, "message": f"Канал додано у чергу ({mode})"}
 
 
 telegram_manager = MultiAccountTelegramServiceManager()

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc, asc, func
 
-from database import init_db, get_db, DB_DIR, PREVIEWS_DIR, Category, Channel, ModelItem, TelegramAccount
+from database import init_db, get_db, DB_DIR, PREVIEWS_DIR, Category, Channel, ModelItem, TelegramAccount, CartItem, Project, ProjectItem
 from telegram_service import telegram_manager, seed_demo_data_if_needed
 
 app = FastAPI(title="3D Model Telegram Aggregator API v1.2.0", version="1.2.0")
@@ -93,6 +93,25 @@ class ModelUpdate(BaseModel):
     category_id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None
+
+
+class CategoryStatusUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    is_visible: Optional[bool] = None
+
+
+class ProjectCreate(BaseModel):
+    name: str
+
+
+class ProjectRename(BaseModel):
+    name: str
+
+
+class SaveToProject(BaseModel):
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None
+    model_ids: List[int]
 
 
 # --- TELEGRAM ACCOUNTS ENDPOINTS ---
@@ -242,7 +261,7 @@ def delete_channel(channel_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/channels/{channel_id}/sync")
 async def sync_channel(channel_id: int, db: Session = Depends(get_db)):
-    res = await telegram_manager.sync_channel_posts(db, channel_id)
+    res = await telegram_manager.queue_channel(db, channel_id)
     return res
 
 
@@ -466,3 +485,269 @@ def delete_model(model_id: int, db: Session = Depends(get_db)):
     db.delete(item)
     db.commit()
     return {"success": True, "message": "Модель видалено з каталогу"}
+
+
+# --- CART ENDPOINTS (MOD-CART) ---
+
+@app.get("/api/cart")
+def get_cart(db: Session = Depends(get_db)):
+    items = db.query(CartItem).all()
+    result = []
+    for item in items:
+        model = item.model
+        if model:
+            result.append({
+                "id": item.id,
+                "model_id": model.id,
+                "title": model.title,
+                "preview_path": model.preview_path,
+                "category_name": model.category.name if model.category else "Інше",
+                "telegram_post_url": model.telegram_post_url,
+                "created_at": item.created_at.isoformat() if item.created_at else None
+            })
+    return {"items": result, "count": len(result)}
+
+
+@app.post("/api/cart")
+def add_to_cart(body: dict, db: Session = Depends(get_db)):
+    model_id = body.get("model_id")
+    if not model_id:
+        raise HTTPException(status_code=400, detail="model_id обов'язковий")
+    
+    model = db.query(ModelItem).filter(ModelItem.id == model_id).first()
+    if not model:
+        raise HTTPException(status_code=404, detail="Модель не знайдено")
+    
+    existing = db.query(CartItem).filter(CartItem.model_id == model_id).first()
+    if existing:
+        return {"success": True, "message": "Модель вже у кошику", "cart_item_id": existing.id}
+    
+    cart_item = CartItem(model_id=model_id)
+    db.add(cart_item)
+    db.commit()
+    db.refresh(cart_item)
+    return {"success": True, "message": "Модель додано до кошика", "cart_item_id": cart_item.id}
+
+
+@app.delete("/api/cart/{cart_item_id}")
+def remove_from_cart(cart_item_id: int, db: Session = Depends(get_db)):
+    item = db.query(CartItem).filter(CartItem.id == cart_item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Елемент кошика не знайдено")
+    db.delete(item)
+    db.commit()
+    return {"success": True, "message": "Модель видалено з кошика"}
+
+
+@app.delete("/api/cart")
+def clear_cart(db: Session = Depends(get_db)):
+    db.query(CartItem).delete()
+    db.commit()
+    return {"success": True, "message": "Кошик очищено"}
+
+
+@app.post("/api/cart/save-to-project")
+def save_to_project(body: SaveToProject, db: Session = Depends(get_db)):
+    if not body.model_ids:
+        raise HTTPException(status_code=400, detail="Оберіть моделі для збереження")
+    
+    # Get or create project
+    project = None
+    if body.project_id:
+        project = db.query(Project).filter(Project.id == body.project_id).first()
+        if not project:
+            raise HTTPException(status_code=404, detail="Проект не знайдено")
+    elif body.project_name:
+        project = Project(name=body.project_name.strip())
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+    else:
+        raise HTTPException(status_code=400, detail="Вкажіть project_id або project_name")
+    
+    # Add models to project
+    added_count = 0
+    for model_id in body.model_ids:
+        model = db.query(ModelItem).filter(ModelItem.id == model_id).first()
+        if not model:
+            continue
+        
+        existing = db.query(ProjectItem).filter(
+            ProjectItem.project_id == project.id,
+            ProjectItem.model_id == model_id
+        ).first()
+        if existing:
+            continue
+        
+        project_item = ProjectItem(project_id=project.id, model_id=model_id)
+        db.add(project_item)
+        added_count += 1
+    
+    # Remove from cart
+    db.query(CartItem).filter(CartItem.model_id.in_(body.model_ids)).delete(synchronize_session='fetch')
+    db.commit()
+    
+    return {
+        "success": True, 
+        "message": f"Додано {added_count} моделей у проект «{project.name}»",
+        "project_id": project.id
+    }
+
+
+# --- PROJECTS ENDPOINTS (MOD-PROJECTS) ---
+
+@app.get("/api/projects")
+def get_projects(db: Session = Depends(get_db)):
+    projects = db.query(Project).order_by(Project.created_at.desc()).all()
+    result = []
+    for proj in projects:
+        item_count = db.query(ProjectItem).filter(ProjectItem.project_id == proj.id).count()
+        result.append({
+            "id": proj.id,
+            "name": proj.name,
+            "item_count": item_count,
+            "created_at": proj.created_at.isoformat() if proj.created_at else None
+        })
+    return result
+
+
+@app.get("/api/projects/{project_id}")
+def get_project_detail(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Проект не знайдено")
+    
+    items = db.query(ProjectItem).filter(ProjectItem.project_id == project_id).all()
+    models = []
+    for item in items:
+        model = item.model
+        if model:
+            models.append(serialize_model(model))
+    
+    return {
+        "id": project.id,
+        "name": project.name,
+        "created_at": project.created_at.isoformat() if project.created_at else None,
+        "models": models
+    }
+
+
+@app.post("/api/projects")
+def create_project(body: ProjectCreate, db: Session = Depends(get_db)):
+    project = Project(name=body.name.strip())
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    return {"id": project.id, "name": project.name, "message": "Проект створено"}
+
+
+@app.patch("/api/projects/{project_id}")
+def rename_project(project_id: int, body: ProjectRename, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Проект не знайдено")
+    project.name = body.name.strip()
+    db.commit()
+    return {"success": True, "message": "Проект перейменовано"}
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Проект не знайдено")
+    db.delete(project)
+    db.commit()
+    return {"success": True, "message": "Проект видалено"}
+
+
+@app.delete("/api/projects/{project_id}/models/{model_id}")
+def remove_model_from_project(project_id: int, model_id: int, db: Session = Depends(get_db)):
+    item = db.query(ProjectItem).filter(
+        ProjectItem.project_id == project_id,
+        ProjectItem.model_id == model_id
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Модель не знайдено у проекті")
+    db.delete(item)
+    db.commit()
+    return {"success": True, "message": "Модель видалено з проекту"}
+
+
+# --- ENHANCED CATEGORY ENDPOINTS (MOD-CATEGORIZE) ---
+
+@app.patch("/api/categories/{category_id}/status")
+def update_category_status(category_id: int, body: CategoryStatusUpdate, db: Session = Depends(get_db)):
+    cat = db.query(Category).filter(Category.id == category_id).first()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Категорію не знайдено")
+    
+    if body.is_active is not None:
+        cat.is_active = body.is_active
+    if body.is_visible is not None:
+        cat.is_visible = body.is_visible
+    
+    db.commit()
+    return {"success": True, "message": "Статус категорії оновлено"}
+
+
+@app.post("/api/categories/apply")
+def apply_category_changes(db: Session = Depends(get_db)):
+    categories = db.query(Category).all()
+    inactive_cats = []
+    deleted_count = 0
+    
+    for cat in categories:
+        if not cat.is_active:
+            model_count = db.query(ModelItem).filter(ModelItem.category_id == cat.id).count()
+            if model_count > 0:
+                inactive_cats.append({"id": cat.id, "name": cat.name, "model_count": model_count})
+            else:
+                db.delete(cat)
+                deleted_count += 1
+    
+    db.commit()
+    
+    if inactive_cats:
+        return {
+            "success": False,
+            "message": "Деякі категорії містять моделі і не можуть бути видалені",
+            "blocked_categories": inactive_cats
+        }
+    
+    return {"success": True, "message": f"Зміни застосовано. Видалено {deleted_count} порожніх категорій"}
+
+
+@app.get("/api/admin/stats")
+def get_admin_stats(db: Session = Depends(get_db)):
+    total_models = db.query(ModelItem).count()
+    total_channels = db.query(Channel).count()
+    active_channels = db.query(Channel).filter(Channel.enabled == True).count()
+    total_categories = db.query(Category).count()
+    active_categories = db.query(Category).filter(Category.is_active == True).count()
+    total_projects = db.query(Project).count()
+    cart_count = db.query(CartItem).count()
+    
+    channels = db.query(Channel).all()
+    channel_stats = []
+    for ch in channels:
+        channel_stats.append({
+            "id": ch.id,
+            "title": ch.title,
+            "status": ch.status or "idle",
+            "scan_mode": ch.scan_mode or "idle",
+            "processed_count": ch.processed_count or 0,
+            "total_posts": ch.total_posts or 0,
+            "enabled": ch.enabled
+        })
+    
+    return {
+        "total_models": total_models,
+        "total_channels": total_channels,
+        "active_channels": active_channels,
+        "total_categories": total_categories,
+        "active_categories": active_categories,
+        "total_projects": total_projects,
+        "cart_count": cart_count,
+        "channel_stats": channel_stats
+    }

@@ -45,6 +45,7 @@ class Category(Base):
     icon = Column(String, default="box")
     sort_order = Column(Integer, default=0)
     is_visible = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
     is_custom = Column(Boolean, default=False)
 
     models = relationship("ModelItem", back_populates="category")
@@ -61,12 +62,14 @@ class Channel(Base):
     
     enabled = Column(Boolean, default=True)
     initial_scan_completed = Column(Boolean, default=False)
-    status = Column(String, default="idle")  # 'initial_scan', 'syncing', 'up_to_date', 'idle', 'error', 'disabled'
+    status = Column(String, default="idle")  # 'idle', 'queued', 'backlog', 'monitoring', 'error', 'disabled'
     status_message = Column(String, nullable=True)
+    scan_mode = Column(String, default="idle")  # 'idle', 'backlog', 'monitoring'
     
     last_scanned_id = Column(Integer, default=0)
     last_synced_at = Column(DateTime, nullable=True)
     processed_count = Column(Integer, default=0)
+    total_posts = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     account = relationship("TelegramAccount", back_populates="channels")
@@ -94,6 +97,38 @@ class ModelItem(Base):
 
     category = relationship("Category", back_populates="models")
     channel = relationship("Channel", back_populates="models")
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    model = relationship("ModelItem")
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    items = relationship("ProjectItem", back_populates="project", cascade="all, delete-orphan")
+
+
+class ProjectItem(Base):
+    __tablename__ = "project_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+    project = relationship("Project", back_populates="items")
+    model = relationship("ModelItem")
 
 
 class TelegramConfig(Base):
@@ -133,6 +168,8 @@ def migrate_sqlite_columns():
             cursor.execute("ALTER TABLE categories ADD COLUMN sort_order INTEGER DEFAULT 0")
         if "is_visible" not in cat_cols:
             cursor.execute("ALTER TABLE categories ADD COLUMN is_visible BOOLEAN DEFAULT 1")
+        if "is_active" not in cat_cols:
+            cursor.execute("ALTER TABLE categories ADD COLUMN is_active BOOLEAN DEFAULT 1")
 
     # Check channels table
     cursor.execute("PRAGMA table_info(channels)")
@@ -150,6 +187,10 @@ def migrate_sqlite_columns():
             cursor.execute("ALTER TABLE channels ADD COLUMN last_synced_at TIMESTAMP")
         if "processed_count" not in ch_cols:
             cursor.execute("ALTER TABLE channels ADD COLUMN processed_count INTEGER DEFAULT 0")
+        if "total_posts" not in ch_cols:
+            cursor.execute("ALTER TABLE channels ADD COLUMN total_posts INTEGER DEFAULT 0")
+        if "scan_mode" not in ch_cols:
+            cursor.execute("ALTER TABLE channels ADD COLUMN scan_mode TEXT DEFAULT 'idle'")
 
     # Check models table
     cursor.execute("PRAGMA table_info(models)")
@@ -161,6 +202,43 @@ def migrate_sqlite_columns():
             cursor.execute("ALTER TABLE models ADD COLUMN archive_types TEXT")
         if "render_engines" not in m_cols:
             cursor.execute("ALTER TABLE models ADD COLUMN render_engines TEXT")
+
+    # Create cart_items table if not exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='cart_items'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            CREATE TABLE cart_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (model_id) REFERENCES models(id)
+            )
+        """)
+
+    # Create projects table if not exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            CREATE TABLE projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    # Create project_items table if not exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='project_items'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            CREATE TABLE project_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                model_id INTEGER NOT NULL,
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                FOREIGN KEY (model_id) REFERENCES models(id)
+            )
+        """)
 
     conn.commit()
     conn.close()
