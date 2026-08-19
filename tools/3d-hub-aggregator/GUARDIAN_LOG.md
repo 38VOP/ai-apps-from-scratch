@@ -61,7 +61,7 @@ tools/3d-aggregator замість tools/3d-hub-aggregator (зупинено д�
 Причина дроблення: App.jsx завеликий для однієї сесії, JSX — слабке місце безкоштовних моделей (двічі падало: биті теги, потім python-heredoc збій на Cart.jsx)
 
 - [x] Catalog.jsx — commit ed70053, підтверджено Guardian
-- [ ] Cart.jsx — в роботі (попередня спроба впала на записі файлу, EDITING_RULES.md v1.1 виправляє причину)
+- [x] Cart.jsx — commit 73c0def, підтверджено Guardian (структура+функції, npm build не перевірено локально Guardian-ом, довіра до звіту агента до тесту власника)
 - [ ] Projects.jsx
 - [ ] CategoryManager.jsx
 - [ ] SourcesPanel.jsx
