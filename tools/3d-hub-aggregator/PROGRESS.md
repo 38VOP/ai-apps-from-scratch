@@ -30,3 +30,9 @@ PROGRESS — 3d-hub-aggregator
 ANCHOR.md: версії MOD-PARSER, MOD-SOURCES, MOD-CART, MOD-PROJECTS → v1.1; якір 1.1.
 Перевірка: py_compile backend OK. Реальне сканування Telegram-каналу до кінця в цьому середовищі НЕ виконувалось (немає сесії власника / API credentials у sandbox) — потрібна перевірка власником після рестарту backend: авторизований акаунт → Sync на канал → backlog з real posts, без рівно «6 моделей». Кількість видалених фейкових ModelItem залежить від локальної БД власника (cleanup спрацює при старті init_db); у репозиторії демо-функції більше немає.
 Файли / commit: tools/3d-hub-aggregator/backend/telegram_service.py, database.py, main.py, frontend/src/App.jsx, ANCHOR.md, PROGRESS.md
+
+Дата: 19.08.2026
+Агент: cline
+Зроблено: Створено відокремлений компонент кошика frontend/src/components/Cart.jsx (MOD-CART v1.1). Перенесено логіку відображення кошика з підтримкою чекбокса на кожній картці моделей, кнопкою «Вибрати всі» / «Зняти всі», кнопкою «Очистити кошик» та кнопкою «Зберегти у проект» з модалками вибору/створення проекту.
+Файли / commit: tools/3d-hub-aggregator/frontend/src/components/Cart.jsx, tools/3d-hub-aggregator/PROGRESS.md
+Перевірка або відхилення: npm run build успішно виконано без помилок.
