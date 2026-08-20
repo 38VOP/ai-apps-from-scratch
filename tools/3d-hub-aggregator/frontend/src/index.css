@@ -251,10 +251,11 @@ body {
   width: 280px;
   background: var(--bg-panel);
   border-right: 1px solid var(--border-color);
-  padding: 24px 16px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  order: -1;
 }
 
 .sidebar-section {

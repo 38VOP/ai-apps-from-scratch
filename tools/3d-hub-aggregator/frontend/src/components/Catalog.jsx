@@ -12,71 +12,7 @@ export default function Catalog({
 
   return (
     <>
-      {activeTab === 'catalog' && (
-        <div className="search-box">
-          <Search className="search-icon" />
-          <input
-            type="text" className="search-input" placeholder="Пошук моделей..."
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-          />
-        </div>
-      )}
-
       <div className="main-layout">
-        <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-          <div className="sources-container">
-            <div className="section-header">
-              <div className="section-title">
-                <Box className="text-primary" size={22} />
-                <span>Каталог моделей <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>({totalModels})</span></span>
-              </div>
-            </div>
-
-            {loadingModels ? (
-              <div className="empty-state"><RefreshCw size={36} className="spin" /><p>Завантаження моделей...</p></div>
-            ) : models.length === 0 ? (
-              <div className="empty-state"><Box size={48} /><h3>Моделей не знайдено</h3><p>Спробуйте обрати іншу категорію або додайте нові канали у розділі «Джерела»</p></div>
-            ) : (
-              <>
-                <div className="models-grid">
-                  {models.map(model => (
-                    <div key={model.id} className="model-card" onClick={() => setSelectedModel(model)}>
-                      <div className="card-media">
-                        <img src={model.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} alt={model.title} className="card-img" />
-                        <div className="card-badge">{model.category_name}</div>
-                      </div>
-                      <div className="card-body">
-                        <h3 className="card-title">{model.title}</h3>
-                        {(model.file_formats?.length > 0 || model.render_engines?.length > 0 || model.archive_types?.length > 0) && (
-                          <div className="card-tags">
-                            {model.file_formats?.map(f => <span key={"fmt-" + f} className="meta-tag meta-tag-format">{f}</span>)}
-                            {model.render_engines?.map(r => <span key={"ren-" + r} className="meta-tag meta-tag-render">{r}</span>)}
-                            {model.archive_types?.map(a => <span key={"arc-" + a} className="meta-tag meta-tag-archive">{a}</span>)}
-                          </div>
-                        )}
-                        <div className="card-footer">
-                          <span className="channel-badge">{model.channel_title}</span>
-                          <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); handleAddToCart(model.id); }}>
-                            <ShoppingCart size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {totalPages > 1 && (
-                  <div className="pagination">
-                    <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Попередня</button>
-                    <span className="page-info">Сторінка {currentPage} з {totalPages}</span>
-                    <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Наступна</button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </main>
-
         <aside className="sidebar">
           <div>
             <div className="sidebar-section">
@@ -104,6 +40,56 @@ export default function Catalog({
             </div>
           </div>
         </aside>
+
+        <main className="content-area">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+              Каталог моделей <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>({totalModels})</span>
+            </h2>
+          </div>
+
+          {loadingModels ? (
+            <div className="empty-state"><RefreshCw size={36} className="spin" /><p>Завантаження моделей...</p></div>
+          ) : models.length === 0 ? (
+            <div className="empty-state"><Box size={48} /><h3>Моделей не знайдено</h3><p>Спробуйте обрати іншу категорію або додайте нові канали у розділі «Джерела»</p></div>
+          ) : (
+            <>
+              <div className="models-grid">
+                {models.map(model => (
+                  <div key={model.id} className="model-card" onClick={() => setSelectedModel(model)}>
+                    <div className="card-media">
+                      <img src={model.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} alt={model.title} className="card-img" />
+                      <div className="card-badge">{model.category_name}</div>
+                    </div>
+                    <div className="card-body">
+                      <h3 className="card-title">{model.title}</h3>
+                      {(model.file_formats?.length > 0 || model.render_engines?.length > 0 || model.archive_types?.length > 0) && (
+                        <div className="card-tags">
+                          {model.file_formats?.map(f => <span key={"fmt-" + f} className="meta-tag meta-tag-format">{f}</span>)}
+                          {model.render_engines?.map(r => <span key={"ren-" + r} className="meta-tag meta-tag-render">{r}</span>)}
+                          {model.archive_types?.map(a => <span key={"arc-" + a} className="meta-tag meta-tag-archive">{a}</span>)}
+                        </div>
+                      )}
+                      <div className="card-footer">
+                        <span className="channel-badge">{model.channel_title}</span>
+                        <button className="btn btn-primary btn-sm" onClick={(e) => { e.stopPropagation(); handleAddToCart(model.id); }}>
+                          <ShoppingCart size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="pagination">
+                  <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Попередня</button>
+                  <span className="page-info">Сторінка {currentPage} з {totalPages}</span>
+                  <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Наступна</button>
+                </div>
+              )}
+            </>
+          )}
+        </main>
       </div>
 
       {selectedModel && (
