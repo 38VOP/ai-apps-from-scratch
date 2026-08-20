@@ -62,8 +62,8 @@ tools/3d-aggregator замість tools/3d-hub-aggregator (зупинено д�
 
 - [x] Catalog.jsx — commit ed70053, підтверджено Guardian
 - [x] Cart.jsx — commit 73c0def, підтверджено Guardian (структура+функції, npm build не перевірено локально Guardian-ом, довіра до звіту агента до тесту власника)
-- [ ] Projects.jsx
-- [ ] CategoryManager.jsx
+- [ ] Projects.jsx — в роботі (Cline, Cerebras)
+- [x] CategoryManager.jsx — commit 27cf4a6, підтверджено Guardian (структура+функції, npm build заявлено агентом)
 - [ ] SourcesPanel.jsx
 - [ ] AdminDashboard.jsx
 - [ ] App.jsx — фінальне оновлення (компонує всі готові компоненти), останній крок
