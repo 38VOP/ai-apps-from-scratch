@@ -66,6 +66,8 @@ tools/3d-aggregator замість tools/3d-hub-aggregator (зупинено д�
 - [x] CategoryManager.jsx — commit 27cf4a6, підтверджено Guardian (структура+функції, npm build заявлено агентом)
 - [x] SourcesPanel.jsx — commit e74cb43, підтверджено Guardian (Гермес)
 - [x] AdminDashboard.jsx — commit eb10087, підтверджено Guardian (Hermes-команда, координатор+пряме виконання)
-- [ ] App.jsx — фінальне оновлення (компонує всі готові компоненти), останній крок
+- [x] App.jsx — commit 32bbff3+2270612, підтверджено Guardian (796 рядків, всі 6 компонентів підключено коректно, AdminDashboard обгорнутий activeTab-умовою, дублікат модалки прибрано)
 
 Правило: перед кожним новим завданням Guardian перевіряє попередній пункт кодом (файл існує в main, npm run build не падає), тільки тоді ставить [x] і дає наступне завдання.
+
+**РАУНД 5b ЗАВЕРШЕНО** (20.08.2026) — правило файлової модульності з ANCHOR.md v1.2 виконано повністю: backend (routers/) і frontend (components/) обидва розбиті на окремі файли-модулі. main.py: 612→31 рядок. App.jsx: 1752→796 рядків.
