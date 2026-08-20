@@ -62,7 +62,7 @@ tools/3d-aggregator замість tools/3d-hub-aggregator (зупинено д�
 
 - [x] Catalog.jsx — commit ed70053, підтверджено Guardian
 - [x] Cart.jsx — commit 73c0def, підтверджено Guardian (структура+функції, npm build не перевірено локально Guardian-ом, довіра до звіту агента до тесту власника)
-- [ ] Projects.jsx — передано команді Гермеса (Cline недоступний, потребує зміни провайдера)
+- [x] Projects.jsx — commit 192b55e, підтверджено Guardian (повний функціонал: CRUD, деталі проекту, Telegram-посилання)
 - [x] CategoryManager.jsx — commit 27cf4a6, підтверджено Guardian (структура+функції, npm build заявлено агентом)
 - [x] SourcesPanel.jsx — commit e74cb43, підтверджено Guardian (Гермес)
 - [x] AdminDashboard.jsx — commit eb10087, підтверджено Guardian (Hermes-команда, координатор+пряме виконання)
