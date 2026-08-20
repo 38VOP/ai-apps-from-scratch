@@ -6,6 +6,13 @@ import {
   FolderOpen, BarChart3, Clock, Zap
 } from 'lucide-react'
 
+import Catalog from './components/Catalog'
+import Cart from './components/Cart'
+import Projects from './components/Projects'
+import CategoryManager from './components/CategoryManager'
+import SourcesPanel from './components/SourcesPanel'
+import AdminDashboard from './components/AdminDashboard'
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('catalog')
   
@@ -623,7 +630,6 @@ export default function App() {
             <Box size={18} />
             <span>Каталог</span>
           </button>
-
           <button 
             className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
             onClick={() => { setActiveTab('sources'); fetchAccounts(); fetchChannels(); }}
@@ -631,7 +637,6 @@ export default function App() {
             <RadioTower size={18} />
             <span>Джерела</span>
           </button>
-
           <button 
             className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
             onClick={() => { setActiveTab('admin'); fetchAdminStats(); }}
@@ -643,19 +648,6 @@ export default function App() {
 
         {/* CART & SEARCH */}
         <div className="header-right">
-          {activeTab === 'catalog' && (
-            <div className="search-box">
-              <Search className="search-icon" />
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Пошук моделей..."
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              />
-            </div>
-          )}
-          
           <button 
             className="cart-btn"
             onClick={() => setShowCartModal(true)}
@@ -676,1028 +668,172 @@ export default function App() {
         </div>
       )}
 
-      {/* MAIN CONTENT AREA */}
-      {activeTab === 'catalog' ? (
-        <div className="main-layout">
-          {/* SIDEBAR */}
-          <aside className="sidebar">
-            <div>
-              {/* Categories Section */}
-              <div className="sidebar-section">
-                <div 
-                  className="sidebar-section-header"
-                  onClick={() => setCatsExpanded(!catsExpanded)}
-                >
-                  <div className="sidebar-title" style={{ marginBottom: 0 }}>Мої Категорії</div>
-                  <span className="collapse-icon">{catsExpanded ? '−' : '+'}</span>
-                </div>
-                
-                {catsExpanded && (
-                  <>
-                    <ul className="nav-list">
-                      <li 
-                        className={`nav-item ${selectedCategory === null ? 'active' : ''}`}
-                        onClick={() => { setSelectedCategory(null); setCurrentPage(1); }}
-                      >
-                        <span>Усі категорії</span>
-                        <span className="badge-count">{totalModels}</span>
-                      </li>
+      {/* COMPONENTS */}
+      <Catalog
+        activeTab={activeTab}
+        models={models}
+        categories={categories}
+        selectedCategory={selectedCategory}
+        searchQuery={searchQuery}
+        totalModels={totalModels}
+        loadingModels={loadingModels}
+        selectedModel={selectedModel}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        catsExpanded={catsExpanded}
+        setCatsExpanded={setCatsExpanded}
+        setShowCatManagerModal={setShowCatManagerModal}
+        fetchUserCategories={fetchUserCategories}
+        setSelectedCategory={setSelectedCategory}
+        setSearchQuery={setSearchQuery}
+        setCurrentPage={setCurrentPage}
+        setSelectedModel={setSelectedModel}
+        handleAddToCart={handleAddToCart}
+        handleUpdateModelCategory={handleUpdateModelCategory}
+        handleDeleteModel={handleDeleteModel}
+        handleRefreshPreview={handleRefreshPreview}
+      />
 
-                      {categories.filter(c => c.is_visible).map(cat => (
-                        <li
-                          key={cat.id}
-                          className={`nav-item ${selectedCategory === cat.id ? 'active' : ''}`}
-                          onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}
-                        >
-                          <span>{cat.name}</span>
-                          <span className="badge-count">{cat.count}</span>
-                        </li>
-                      ))}
-                    </ul>
+      <Projects
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        projects={projects}
+        selectedProject={selectedProject}
+        setSelectedProject={setSelectedProject}
+        projectModels={projectModels}
+        fetchProjects={fetchProjects}
+        fetchProjectDetail={fetchProjectDetail}
+        handleCreateProject={handleCreateProject}
+        handleDeleteProject={handleDeleteProject}
+        handleRemoveFromProject={handleRemoveFromProject}
+        setShowNewProjectModal={setShowNewProjectModal}
+        newProjectName={newProjectName}
+        setNewProjectName={setNewProjectName}
+      />
 
-                    <button 
-                      className="btn btn-secondary btn-sm" 
-                      style={{ width: '100%', marginTop: 12, justifyContent: 'center' }}
-                      onClick={() => { fetchUserCategories(true); setShowCatManagerModal(true); }}
-                    >
-                      <Settings size={14} />
-                      <span>Налаштувати</span>
-                    </button>
-                  </>
-                )}
-              </div>
+      <SourcesPanel
+        activeTab={activeTab}
+        accounts={accounts}
+        channels={channels}
+        syncingChannelId={syncingChannelId}
+        showAddAccountModal={showAddAccountModal}
+        setShowAddAccountModal={setShowAddAccountModal}
+        showAddChannelModal={showAddChannelModal}
+        setShowAddChannelModal={setShowAddChannelModal}
+        accForm={accForm}
+        setAccForm={setAccForm}
+        accStep={accStep}
+        setAccStep={setAccStep}
+        accCode={accCode}
+        setAccCode={setAccCode}
+        accMsg={accMsg}
+        setAccMsg={setAccMsg}
+        chForm={chForm}
+        setChForm={setChForm}
+        handleAddAccountSubmit={handleAddAccountSubmit}
+        handleVerifyAccCode={handleVerifyAccCode}
+        handleRequestAccCode={handleRequestAccCode}
+        handleDeleteAccount={handleDeleteAccount}
+        handleAddChannelSubmit={handleAddChannelSubmit}
+        handleToggleChannelEnabled={handleToggleChannelEnabled}
+        handleChangeChannelAccount={handleChangeChannelAccount}
+        handleDeleteChannel={handleDeleteChannel}
+        handleSyncChannel={handleSyncChannel}
+        getStatusLabel={getStatusLabel}
+      />
 
-              {/* Projects Section */}
-              <div className="sidebar-section" style={{ marginTop: 16 }}>
-                <div 
-                  className="sidebar-section-header"
-                  onClick={() => setProjectsExpanded(!projectsExpanded)}
-                >
-                  <div className="sidebar-title" style={{ marginBottom: 0 }}>Проекти</div>
-                  <span className="collapse-icon">{projectsExpanded ? '−' : '+'}</span>
-                </div>
-                
-                {projectsExpanded && (
-                  <ul className="nav-list">
-                    {projects.length === 0 ? (
-                      <li className="nav-item" style={{ opacity: 0.5, cursor: 'default' }}>
-                        <span>Немає проектів</span>
-                      </li>
-                    ) : (
-                      <>
-                        <li
-                          className={`nav-item ${activeTab === 'projects' && !selectedProject ? 'active' : ''}`}
-                          onClick={() => { setActiveTab('projects'); setSelectedProject(null); fetchProjects(); }}
-                        >
-                          <FolderOpen size={14} />
-                          <span>Всі проекти</span>
-                        </li>
-                        {projects.map(proj => (
-                          <li
-                            key={proj.id}
-                            className={`nav-item ${selectedProject?.id === proj.id && activeTab === 'projects' ? 'active' : ''}`}
-                            onClick={() => { setActiveTab('projects'); fetchProjectDetail(proj.id); }}
-                          >
-                            <span>{proj.name}</span>
-                            <span className="badge-count">{proj.item_count}</span>
-                          </li>
-                        ))}
-                      </>
-                    )}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </aside>
-
-          {/* CATALOG MODELS GRID */}
-          <main className="content-area">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
-                Каталог моделей <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>({totalModels})</span>
-              </h2>
-            </div>
-
-            {loadingModels ? (
-              <div className="empty-state">
-                <RefreshCw size={36} className="spin" />
-                <p>Завантаження моделей...</p>
-              </div>
-            ) : models.length === 0 ? (
-              <div className="empty-state">
-                <Box size={48} />
-                <h3>Моделей не знайдено</h3>
-                <p>Спробуйте обрати іншу категорію або додайте нові канали у розділі «Джерела»</p>
-              </div>
-            ) : (
-              <>
-                <div className="models-grid">
-                  {models.map(model => (
-                    <div 
-                      key={model.id} 
-                      className="model-card"
-                      onClick={() => setSelectedModel(model)}
-                    >
-                      <div className="card-media">
-                        <img 
-                          src={model.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} 
-                          alt={model.title} 
-                          className="card-img" 
-                        />
-                        <div className="card-badge">{model.category_name}</div>
-                      </div>
-
-                      <div className="card-body">
-                        <h3 className="card-title">{model.title}</h3>
-
-                        {(model.file_formats?.length > 0 || model.render_engines?.length > 0 || model.archive_types?.length > 0) && (
-                          <div className="card-tags">
-                            {model.file_formats?.map(f => (
-                              <span key={`fmt-${f}`} className="meta-tag meta-tag-format">{f}</span>
-                            ))}
-                            {model.render_engines?.map(r => (
-                              <span key={`ren-${r}`} className="meta-tag meta-tag-render">{r}</span>
-                            ))}
-                            {model.archive_types?.map(a => (
-                              <span key={`arc-${a}`} className="meta-tag meta-tag-archive">{a}</span>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="card-footer">
-                          <span className="channel-badge">{model.channel_title}</span>
-                          <button 
-                            className="btn btn-primary btn-sm"
-                            onClick={(e) => { e.stopPropagation(); handleAddToCart(model.id); }}
-                          >
-                            <ShoppingCart size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* PAGINATION */}
-                {totalPages > 1 && (
-                  <div className="pagination">
-                    <button 
-                      className="btn btn-secondary btn-sm"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(p => p - 1)}
-                    >
-                      Попередня
-                    </button>
-                    <span className="page-info">
-                      Сторінка {currentPage} з {totalPages}
-                    </span>
-                    <button 
-                      className="btn btn-secondary btn-sm"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(p => p + 1)}
-                    >
-                      Наступна
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </main>
-        </div>
-      ) : activeTab === 'projects' ? (
-        /* PROJECTS VIEW */
-        <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-          <div className="sources-container">
-            <div className="sources-section">
-              <div className="section-header">
-                <div className="section-title">
-                  <FolderOpen className="text-primary" size={22} />
-                  <span>Мої проекти</span>
-                </div>
-                <button className="btn btn-primary" onClick={() => setShowNewProjectModal(true)}>
-                  <Plus size={16} />
-                  <span>Новий проект</span>
-                </button>
-              </div>
-
-              {projects.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Немає проектів. Створіть перший проект.</p>
-              ) : (
-                <div className="projects-grid">
-                  {projects.map(proj => (
-                    <div 
-                      key={proj.id} 
-                      className={`project-card ${selectedProject?.id === proj.id ? 'selected' : ''}`}
-                      onClick={() => fetchProjectDetail(proj.id)}
-                    >
-                      <div className="project-header">
-                        <span className="project-name">{proj.name}</span>
-                        <button 
-                          className="btn btn-danger btn-sm"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteProject(proj.id); }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                      <div className="project-meta">
-                        <span>{proj.item_count} моделей</span>
-                        <span>{new Date(proj.created_at).toLocaleDateString('uk-UA')}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* PROJECT DETAIL */}
-            {selectedProject && (
-              <div className="sources-section">
-                <div className="section-header">
-                  <div className="section-title">
-                    <Layers className="text-cyan" size={22} />
-                    <span>{selectedProject.name}</span>
-                  </div>
-                </div>
-
-                {projectModels.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Проект порожній. Додайте моделі з кошика.</p>
-                ) : (
-                  <div className="models-grid">
-                    {projectModels.map(model => (
-                      <div key={model.id} className="model-card">
-                        <div className="card-media">
-                          <img 
-                            src={model.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} 
-                            alt={model.title} 
-                            className="card-img" 
-                          />
-                        </div>
-                        <div className="card-body">
-                          <h3 className="card-title">{model.title}</h3>
-                          <div className="card-footer">
-                            <a 
-                              href={model.telegram_post_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="btn-tg-link"
-                            >
-                              Завантажити ↗
-                            </a>
-                            <button 
-                              className="btn btn-danger btn-sm"
-                              onClick={() => handleRemoveFromProject(selectedProject.id, model.id)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </main>
-      ) : activeTab === 'sources' ? (
-        /* TELEGRAM SOURCES MANAGEMENT VIEW */
-        <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-          <div className="sources-container">
-            {/* SECTION 1: TELEGRAM ACCOUNTS */}
-            <div className="sources-section">
-              <div className="section-header">
-                <div className="section-title">
-                  <ShieldCheck className="text-primary" size={22} />
-                  <span>Telegram-акаунти</span>
-                </div>
-                <button className="btn btn-primary" onClick={() => setShowAddAccountModal(true)}>
-                  <Plus size={16} />
-                  <span>Додати акаунт</span>
-                </button>
-              </div>
-
-              {accounts.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Немає підключених акаунтів</p>
-              ) : (
-                <div className="accounts-grid">
-                  {accounts.map(acc => (
-                    <div key={acc.id} className="account-card">
-                      <div className="account-header">
-                        <span className="account-name">{acc.name}</span>
-                        <span className={`status-pill ${acc.is_authorized ? 'active' : 'idle'}`}>
-                          {acc.is_authorized ? "🟢 З'єднано" : "⚪ Не авторизовано"}
-                        </span>
-                      </div>
-                      
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Телефон: {acc.phone_number || 'Не вказано'}
-                      </div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>
-                        Прив'язано каналів: {acc.channels_count}
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDeleteAccount(acc.id)}>
-                          <Trash2 size={14} />
-                          <span>Видалити</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* SECTION 2: TELEGRAM CHANNELS */}
-            <div className="sources-section">
-              <div className="section-header">
-                <div className="section-title">
-                  <RadioTower className="text-cyan" size={22} />
-                  <span>Telegram-канали для моніторингу</span>
-                </div>
-                <button className="btn btn-secondary" onClick={() => setShowAddChannelModal(true)}>
-                  <Plus size={16} />
-                  <span>Додати канал</span>
-                </button>
-              </div>
-
-              {channels.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Список каналів порожній</p>
-              ) : (
-                <table className="channels-table">
-                  <thead>
-                    <tr>
-                      <th>Назва каналу</th>
-                      <th>Прив'язаний акаунт</th>
-                      <th>Статус</th>
-                      <th>Прогрес</th>
-                      <th>Останнє оновлення</th>
-                      <th>Моделей</th>
-                      <th>Моніторинг</th>
-                      <th style={{ textAlign: 'right' }}>Дії</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {channels.map(ch => (
-                      <tr key={ch.id}>
-                        <td style={{ fontWeight: 600 }}>
-                          {ch.title}
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 400 }}>
-                            @{ch.username || ch.telegram_id}
-                          </div>
-                        </td>
-
-                        <td>
-                          <select 
-                            className="form-select" 
-                            style={{ padding: '6px 10px', fontSize: '0.82rem' }}
-                            value={ch.account_id || ''}
-                            onChange={(e) => handleChangeChannelAccount(ch.id, e.target.value)}
-                          >
-                            <option value="">Не призначено</option>
-                            {accounts.map(acc => (
-                              <option key={acc.id} value={acc.id}>{acc.name}</option>
-                            ))}
-                          </select>
-                        </td>
-
-                        <td>
-                          <span className={`status-pill ${
-                            ch.status === 'queued' ? 'idle' :
-                            ch.status === 'backlog' ? 'idle' : 
-                            ch.status === 'monitoring' || ch.status === 'up_to_date' ? 'active' : 
-                            ch.status === 'error' ? 'error' : 'idle'
-                          }`}>
-                            {getStatusLabel(ch.status)}
-                          </span>
-                        </td>
-
-                        <td>
-                          {ch.total_posts > 0 && (
-                            <div className="progress-bar">
-                              <div 
-                                className="progress-fill" 
-                                style={{ width: `${Math.round((ch.processed_count / ch.total_posts) * 100)}%` }}
-                              />
-                              <span className="progress-text">
-                                {Math.round((ch.processed_count / ch.total_posts) * 100)}%
-                              </span>
-                            </div>
-                          )}
-                        </td>
-
-                        <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                          {ch.last_synced_at ? new Date(ch.last_synced_at).toLocaleString('uk-UA') : 'Ніколи'}
-                        </td>
-
-                        <td>
-                          <span className="badge-count" style={{ fontSize: '0.85rem' }}>{ch.processed_count}</span>
-                        </td>
-
-                        <td>
-                          <label className="switch">
-                            <input 
-                              type="checkbox" 
-                              checked={ch.enabled} 
-                              onChange={() => handleToggleChannelEnabled(ch.id, ch.enabled)}
-                            />
-                            <span className="slider"></span>
-                          </label>
-                        </td>
-
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                            <button 
-                              className="btn btn-primary btn-sm"
-                              onClick={() => handleSyncChannel(ch.id)}
-                              disabled={syncingChannelId === ch.id || !ch.enabled}
-                            >
-                              <RefreshCw size={14} className={syncingChannelId === ch.id ? 'spin' : ''} />
-                              <span>Синхронізувати</span>
-                            </button>
-                            
-                            <button className="btn btn-danger btn-sm" onClick={() => handleDeleteChannel(ch.id)}>
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </main>
-      ) : (
-        /* ADMIN DASHBOARD VIEW */
-        <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-          <div className="sources-container">
-            <div className="section-header">
-              <div className="section-title">
-                <BarChart3 className="text-primary" size={22} />
-                <span>Статистика системи</span>
-              </div>
-              <button className="btn btn-secondary" onClick={fetchAdminStats}>
-                <RefreshCw size={16} />
-                <span>Оновити</span>
-              </button>
-            </div>
-
-            {adminStats && (
-              <>
-                <div className="stats-grid">
-                  <div className="stat-card">
-                    <Layers size={24} className="text-primary" />
-                    <div className="stat-value">{adminStats.total_models}</div>
-                    <div className="stat-label">Моделей</div>
-                  </div>
-                  <div className="stat-card">
-                    <RadioTower size={24} className="text-cyan" />
-                    <div className="stat-value">{adminStats.active_channels} / {adminStats.total_channels}</div>
-                    <div className="stat-label">Активних каналів</div>
-                  </div>
-                  <div className="stat-card">
-                    <FolderOpen size={24} className="text-emerald" />
-                    <div className="stat-value">{adminStats.total_projects}</div>
-                    <div className="stat-label">Проектів</div>
-                  </div>
-                  <div className="stat-card">
-                    <ShoppingCart size={24} className="text-amber" />
-                    <div className="stat-value">{adminStats.cart_count}</div>
-                    <div className="stat-label">У кошику</div>
-                  </div>
-                </div>
-
-                <div className="sources-section">
-                  <div className="section-title" style={{ marginBottom: 16 }}>
-                    <Clock size={18} />
-                    <span>Статус каналів</span>
-                  </div>
-                  
-                  <table className="channels-table">
-                    <thead>
-                      <tr>
-                        <th>Канал</th>
-                        <th>Статус</th>
-                        <th>Режим</th>
-                        <th>Прогрес</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {adminStats.channel_stats.map(ch => (
-                        <tr key={ch.id}>
-                          <td style={{ fontWeight: 600 }}>{ch.title}</td>
-                          <td>
-                            <span className={`status-pill ${
-                              ch.status === 'queued' ? 'idle' :
-                              ch.status === 'backlog' ? 'idle' : 
-                              ch.status === 'monitoring' || ch.status === 'up_to_date' ? 'active' : 
-                              ch.status === 'error' ? 'error' : 'idle'
-                            }`}>
-                              {getStatusLabel(ch.status)}
-                            </span>
-                          </td>
-                          <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            {ch.scan_mode || 'idle'}
-                          </td>
-                          <td>
-                            {ch.total_posts > 0 ? (
-                              <div className="progress-bar">
-                                <div 
-                                  className="progress-fill" 
-                                  style={{ width: `${Math.round((ch.processed_count / ch.total_posts) * 100)}%` }}
-                                />
-                                <span className="progress-text">
-                                  {ch.processed_count} / {ch.total_posts}
-                                </span>
-                              </div>
-                            ) : (
-                              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                                {ch.processed_count} моделей
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </div>
-        </main>
+      {activeTab === 'admin' && (
+        <AdminDashboard
+          adminStats={adminStats}
+          fetchAdminStats={fetchAdminStats}
+          getStatusLabel={getStatusLabel}
+        />
       )}
 
-      {/* MODAL: CART */}
-      {showCartModal && (
-        <div className="modal-overlay" onClick={() => setShowCartModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">
-                <ShoppingCart size={20} style={{ marginRight: 8 }} />
-                Кошик ({cartCount})
-              </h2>
-              <button className="btn-close" onClick={() => setShowCartModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
+      {/* MODALS */}
+      <Cart
+        activeTab={activeTab}
+        cartItems={cartItems}
+        cartCount={cartCount}
+        projects={projects}
+        showCartModal={showCartModal}
+        setShowCartModal={setShowCartModal}
+        showSaveToProjectModal={showSaveToProjectModal}
+        setShowSaveToProjectModal={setShowSaveToProjectModal}
+        showNewProjectModal={showNewProjectModal}
+        setShowNewProjectModal={setShowNewProjectModal}
+        selectedProject={selectedProject}
+        setSelectedProject={setSelectedProject}
+        newProjectName={newProjectName}
+        setNewProjectName={setNewProjectName}
+        selectedModelsForProject={selectedModelsForProject}
+        setSelectedModelsForProject={setSelectedModelsForProject}
+        handleRemoveFromCart={handleRemoveFromCart}
+        handleClearCart={handleClearCart}
+        handleSaveToProject={handleSaveToProject}
+        handleCreateProject={handleCreateProject}
+        fetchProjects={fetchProjects}
+      />
 
-            {cartItems.length === 0 ? (
-              <div className="empty-state" style={{ padding: 40 }}>
-                <ShoppingCart size={48} />
-                <p>Кошик порожній</p>
-              </div>
-            ) : (
-              <>
-                <div className="cart-grid">
-                  {cartItems.map(item => (
-                    <div key={item.id} className="cart-item">
-                      <img 
-                        src={item.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80'} 
-                        alt={item.title}
-                        className="cart-item-img"
-                      />
-                      <div className="cart-item-info">
-                        <span className="cart-item-title">{item.title}</span>
-                        <span className="cart-item-cat">{item.category_name}</span>
-                      </div>
-                      <button 
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleRemoveFromCart(item.id)}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+      <CategoryManager
+        showCatManagerModal={showCatManagerModal}
+        setShowCatManagerModal={setShowCatManagerModal}
+        categories={categories}
+        newCatName={newCatName}
+        setNewCatName={setNewCatName}
+        catStatuses={catStatuses}
+        handleCreateNewCategory={handleCreateNewCategory}
+        handleToggleCategoryStatus={handleToggleCategoryStatus}
+        handleMoveCategoryOrder={handleMoveCategoryOrder}
+        handleDeleteCategory={handleDeleteCategory}
+        handleApplyCategoryChanges={handleApplyCategoryChanges}
+        fetchUserCategories={fetchUserCategories}
+      />
 
-                <div className="cart-actions">
-                  <button className="btn btn-danger" onClick={handleClearCart}>
-                    <Trash2 size={16} />
-                    <span>Очистити кошик</span>
-                  </button>
-                  <button 
-                    className="btn btn-primary"
-                    onClick={() => { setShowSaveToProjectModal(true); fetchProjects(); }}
-                  >
-                    <FolderOpen size={16} />
-                    <span>Зберегти у проект</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: SAVE TO PROJECT */}
-      {showSaveToProjectModal && (
-        <div className="modal-overlay" onClick={() => setShowSaveToProjectModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Зберегти у проект</h2>
-              <button className="btn-close" onClick={() => setShowSaveToProjectModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Оберіть проект або створіть новий:</label>
-              
-              <div className="project-select-list">
-                {projects.map(proj => (
-                  <div 
-                    key={proj.id}
-                    className={`project-select-item ${selectedProject?.id === proj.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedProject(proj)}
-                  >
-                    <FolderOpen size={16} />
-                    <span>{proj.name}</span>
-                    {selectedProject?.id === proj.id && <Check size={16} className="text-primary" />}
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ marginTop: 16 }}>
-                <label className="form-label">Або створити новий проект:</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="Назва нового проекту..."
-                  value={newProjectName}
-                  onChange={e => setNewProjectName(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-              <button className="btn btn-secondary" onClick={() => setShowSaveToProjectModal(false)}>
-                Скасувати
-              </button>
-              <button 
-                className="btn btn-primary"
-                onClick={handleSaveToProject}
-                disabled={!selectedProject && !newProjectName}
-              >
-                Зберегти ({selectedModelsForProject.length || cartCount} моделей)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: NEW PROJECT */}
-      {showNewProjectModal && (
-        <div className="modal-overlay" onClick={() => setShowNewProjectModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Новий проект</h2>
-              <button className="btn-close" onClick={() => setShowNewProjectModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Назва проекту:</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Введіть назву..."
-                value={newProjectName}
-                onChange={e => setNewProjectName(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-              <button className="btn btn-secondary" onClick={() => setShowNewProjectModal(false)}>
-                Скасувати
-              </button>
-              <button className="btn btn-primary" onClick={handleCreateProject}>
-                Створити
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: CATEGORIES MANAGER */}
-      {showCatManagerModal && (
-        <div className="modal-overlay" onClick={() => setShowCatManagerModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Налаштування категорій</h2>
-              <button className="btn-close" onClick={() => setShowCatManagerModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateNewCategory} style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Назва нової категорії..."
-                value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
-              />
-              <button type="submit" className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <Plus size={16} />
-              </button>
-            </form>
-
-            <div className="cat-legend">
-              <span><span className="cat-dot green"></span> Активна для класифікатора</span>
-              <span><span className="cat-dot red"></span> Позначена на видалення</span>
-              <span><span className="cat-dot neutral"></span> Нейтральна</span>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-              {categories.map((cat, idx) => {
-                const status = catStatuses[cat.id] || { active: true, visible: true, markedForDeletion: false }
-                const statusClass = status.markedForDeletion ? 'red' : status.active ? 'green' : 'neutral'
-                const statusIcon = status.markedForDeletion ? <AlertCircle size={18} /> : status.active ? <CheckCircle size={18} /> : <Zap size={18} />
-                const statusTitle = status.markedForDeletion ? 'Позначена на видалення' : status.active ? 'Активна для класифікатора' : 'Нейтральна'
-                
-                return (
-                <div key={cat.id} className="cat-manage-item">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <button 
-                      type="button"
-                      className={`cat-status-btn ${statusClass}`}
-                      onClick={() => handleToggleCategoryStatus(cat.id)}
-                      title={statusTitle}
-                    >
-                      {statusIcon}
-                    </button>
-                    <span style={{ 
-                      fontWeight: 600, 
-                      opacity: status.visible !== false ? 1 : 0.4,
-                      textDecoration: status.markedForDeletion ? 'line-through' : 'none'
-                    }}>
-                      {cat.name}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button 
-                      type="button" 
-                      className="btn-close"
-                      disabled={idx === 0}
-                      onClick={() => handleMoveCategoryOrder(cat.id, 'up')}
-                    >
-                      <ArrowUp size={16} />
-                    </button>
-                    <button 
-                      type="button" 
-                      className="btn-close"
-                      disabled={idx === categories.length - 1}
-                      onClick={() => handleMoveCategoryOrder(cat.id, 'down')}
-                    >
-                      <ArrowDown size={16} />
-                    </button>
-                    {cat.is_custom && (
-                      <button 
-                        type="button" 
-                        className="btn-close" 
-                        onClick={() => handleDeleteCategory(cat.id)}
-                        style={{ color: 'var(--rose)' }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                )
-              })}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-              <button className="btn btn-secondary" onClick={handleApplyCategoryChanges}>
-                Застосувати зміни
-              </button>
-              <button className="btn btn-primary" onClick={() => { fetchUserCategories(); setShowCatManagerModal(false); }}>
-                Готово
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ADD TELEGRAM ACCOUNT */}
-      {showAddAccountModal && (
-        <div className="modal-overlay" onClick={() => setShowAddAccountModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Підключити Telegram-акаунт</h2>
-              <button className="btn-close" onClick={() => setShowAddAccountModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            {accMsg && (
-              <div style={{
-                padding: 10, borderRadius: 'var(--radius-md)',
-                background: 'rgba(139, 92, 246, 0.15)', color: 'var(--primary-light)',
-                marginBottom: 16, fontSize: '0.85rem'
-              }}>
-                {accMsg}
-              </div>
-            )}
-
-            {accStep === 'config' ? (
-              <form onSubmit={handleAddAccountSubmit}>
-                <div className="form-group">
-                  <label className="form-label">Назва акаунту:</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    value={accForm.name} 
-                    onChange={e => setAccForm({ ...accForm, name: e.target.value })} 
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">API ID (з my.telegram.org):</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="12345678"
-                    value={accForm.api_id} 
-                    onChange={e => setAccForm({ ...accForm, api_id: e.target.value })} 
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">API Hash (з my.telegram.org):</label>
-                  <input 
-                    type="password" 
-                    className="form-input" 
-                    placeholder="abcdef123456..."
-                    value={accForm.api_hash} 
-                    onChange={e => setAccForm({ ...accForm, api_hash: e.target.value })} 
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Номер телефону:</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="+380991234567"
-                    value={accForm.phone_number} 
-                    onChange={e => setAccForm({ ...accForm, phone_number: e.target.value })} 
-                  />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddAccountModal(false)}>
-                    Скасувати
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    Зберегти та продовжити
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyAccCode}>
-                <div className="form-group">
-                  <label className="form-label">Код підтвердження з Telegram:</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="12345" 
-                    value={accCode}
-                    onChange={e => setAccCode(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-                  <button type="button" className="btn btn-secondary" onClick={handleRequestAccCode}>
-                    Запитати код
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    Підтвердити та увійти
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ADD TELEGRAM CHANNEL */}
-      {showAddChannelModal && (
-        <div className="modal-overlay" onClick={() => setShowAddChannelModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Додати Telegram-канал</h2>
-              <button className="btn-close" onClick={() => setShowAddChannelModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddChannelSubmit}>
-              <div className="form-group">
-                <label className="form-label">Username або посилання:</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="@3d_models_free або t.me/3d_models_free"
-                  value={chForm.telegram_id}
-                  onChange={e => setChForm({ ...chForm, telegram_id: e.target.value })}
-                  autoFocus
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Назва каналу (необов'язково):</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="3D Free Models Catalog"
-                  value={chForm.title}
-                  onChange={e => setChForm({ ...chForm, title: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Прив'язати до акаунту:</label>
-                <select 
-                  className="form-select"
-                  value={chForm.account_id}
-                  onChange={e => setChForm({ ...chForm, account_id: e.target.value })}
-                >
-                  <option value="">Автоматично</option>
-                  {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddChannelModal(false)}>
-                  Скасувати
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Додати канал
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: MODEL DETAIL */}
+      {/* MODEL DETAIL MODAL */}
       {selectedModel && (
         <div className="modal-overlay" onClick={() => setSelectedModel(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 680 }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
             <div className="modal-header">
               <h2 className="modal-title">Деталі моделі</h2>
               <button className="btn-close" onClick={() => setSelectedModel(null)}>
                 <X size={20} />
               </button>
             </div>
-
-            <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
-              <img 
-                src={selectedModel.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} 
-                alt={selectedModel.title}
-                style={{ width: 220, height: 180, objectFit: 'cover', borderRadius: 'var(--radius-md)' }} 
-              />
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{selectedModel.title}</h3>
-
+            <div className="model-detail">
+              <div className="detail-media">
+                <img 
+                  src={selectedModel.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} 
+                  alt={selectedModel.title} 
+                  className="detail-img" 
+                />
+              </div>
+              <div className="detail-info">
+                <h3>{selectedModel.title}</h3>
+                <div className="detail-meta">
+                  <span><strong>Категорія:</strong> {selectedModel.category_name}</span>
+                  <span><strong>Джерело:</strong> {selectedModel.channel_title}</span>
+                  {selectedModel.post_date && <span><strong>Дата посту:</strong> {new Date(selectedModel.post_date).toLocaleDateString('uk-UA')}</span>}
+                </div>
                 {(selectedModel.file_formats?.length > 0 || selectedModel.render_engines?.length > 0 || selectedModel.archive_types?.length > 0) && (
                   <div className="card-tags">
-                    {selectedModel.file_formats?.map(f => (
-                      <span key={`fmt-${f}`} className="meta-tag meta-tag-format">{f}</span>
-                    ))}
-                    {selectedModel.render_engines?.map(r => (
-                      <span key={`ren-${r}`} className="meta-tag meta-tag-render">{r}</span>
-                    ))}
-                    {selectedModel.archive_types?.map(a => (
-                      <span key={`arc-${a}`} className="meta-tag meta-tag-archive">{a}</span>
-                    ))}
+                    {selectedModel.file_formats?.map(f => <span key={"fmt-" + f} className="meta-tag meta-tag-format">{f}</span>)}
+                    {selectedModel.render_engines?.map(r => <span key={"ren-" + r} className="meta-tag meta-tag-render">{r}</span>)}
+                    {selectedModel.archive_types?.map(a => <span key={"arc-" + a} className="meta-tag meta-tag-archive">{a}</span>)}
                   </div>
                 )}
-
                 <div className="form-group">
                   <label className="form-label">Перенести в категорію:</label>
                   <select 
-                    className="form-select"
+                    className="form-select" 
                     value={selectedModel.category_id}
                     onChange={(e) => handleUpdateModelCategory(selectedModel.id, Number(e.target.value))}
                   >
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
+                    {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                   </select>
                 </div>
               </div>
             </div>
-
             <div className="form-group">
               <label className="form-label">Опис з Telegram:</label>
               <p style={{ 
@@ -1708,7 +844,6 @@ export default function App() {
                 {selectedModel.description || 'Опис відсутній'}
               </p>
             </div>
-
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20, alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button 
@@ -1737,7 +872,7 @@ export default function App() {
                 <a 
                   href={selectedModel.telegram_post_url} 
                   target="_blank" 
-                  rel="noopener noreferrer"
+                  rel="noopener noreferrer" 
                   className="btn btn-secondary"
                 >
                   <ExternalLink size={16} />
