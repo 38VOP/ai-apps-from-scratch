@@ -200,6 +200,23 @@ export default function SourcesPanel({
             )}
           </div>
         </div>
+
+        {/* About / version block */}
+        <div style={{
+          marginTop: 24,
+          padding: '12px 16px',
+          borderRadius: 'var(--radius-md)',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--border)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '0.78rem',
+          color: 'var(--text-muted)'
+        }}>
+          <span>3D Hub Aggregator v1.0.0</span>
+          <span>Build: 2026-08-20</span>
+        </div>
       </main>
 
       {showAddAccountModal && (
