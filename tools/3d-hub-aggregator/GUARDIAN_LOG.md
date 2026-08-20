@@ -64,8 +64,8 @@ tools/3d-aggregator замість tools/3d-hub-aggregator (зупинено д�
 - [x] Cart.jsx — commit 73c0def, підтверджено Guardian (структура+функції, npm build не перевірено локально Guardian-ом, довіра до звіту агента до тесту власника)
 - [ ] Projects.jsx — в роботі (Cline, Cerebras)
 - [x] CategoryManager.jsx — commit 27cf4a6, підтверджено Guardian (структура+функції, npm build заявлено агентом)
-- [ ] SourcesPanel.jsx
-- [ ] AdminDashboard.jsx
+- [x] SourcesPanel.jsx — commit e74cb43, підтверджено Guardian (Гермес)
+- [x] AdminDashboard.jsx — commit eb10087, підтверджено Guardian (Hermes-команда, координатор+пряме виконання)
 - [ ] App.jsx — фінальне оновлення (компонує всі готові компоненти), останній крок
 
 Правило: перед кожним новим завданням Guardian перевіряє попередній пункт кодом (файл існує в main, npm run build не падає), тільки тоді ставить [x] і дає наступне завдання.
