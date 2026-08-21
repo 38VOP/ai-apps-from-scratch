@@ -17,7 +17,7 @@ export default function Catalog({
           <div>
             <div className="sidebar-section">
               <div className="sidebar-section-header" onClick={() => setCatsExpanded(!catsExpanded)}>
-                <div className="sidebar-title" style={{ marginBottom: 0 }}>Мої Категорії</div>
+                <div className="sidebar-title" style={{ marginBottom: 0 }}>Категорії</div>
                 <span className="collapse-icon">{catsExpanded ? '−' : '+'}</span>
               </div>
               {catsExpanded && (
