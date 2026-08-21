@@ -88,7 +88,7 @@ export default function Catalog({
 
       {selectedModel && (
         <div className="modal-overlay" onClick={() => setSelectedModel(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 860 }}>
             <div className="modal-header"><h2 className="modal-title">Деталі моделі</h2><button className="btn-close" onClick={() => setSelectedModel(null)}><X size={20} /></button></div>
             <div className="model-detail">
               <div className="detail-media"><img src={selectedModel.preview_path || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'} alt={selectedModel.title} className="detail-img" /></div>
@@ -112,22 +112,22 @@ export default function Catalog({
                     {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                   </select>
                 </div>
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Опис з Telegram:</label>
-              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 'var(--radius-md)', whiteSpace: 'pre-wrap' }}>
-                {selectedModel.description || 'Опис відсутній'}
-              </p>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20, alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDeleteModel(selectedModel.id)}><Trash2 size={14} /><span>Видалити</span></button>
-                <button className="btn btn-secondary btn-sm" onClick={() => handleRefreshPreview(selectedModel.id)}><RefreshCw size={14} /><span>Оновити прев'ю</span></button>
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button className="btn btn-primary btn-sm" onClick={() => { handleAddToCart(selectedModel.id); setSelectedModel(null); }}><ShoppingCart size={14} /><span>Додати в кошик</span></button>
-                <a href={selectedModel.telegram_post_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary"><ExternalLink size={16} /><span>В Telegram</span></a>
+                <div className="form-group">
+                  <label className="form-label">Опис з Telegram:</label>
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 'var(--radius-md)', whiteSpace: 'pre-wrap' }}>
+                    {selectedModel.description || 'Опис відсутній'}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteModel(selectedModel.id)}><Trash2 size={14} /><span>Видалити</span></button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleRefreshPreview(selectedModel.id)}><RefreshCw size={14} /><span>Оновити прев'ю</span></button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => { handleAddToCart(selectedModel.id); setSelectedModel(null); }}><ShoppingCart size={14} /><span>Додати в кошик</span></button>
+                    <a href={selectedModel.telegram_post_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary"><ExternalLink size={16} /><span>В Telegram</span></a>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
