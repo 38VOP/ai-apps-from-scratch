@@ -653,7 +653,7 @@ export default function App() {
             onClick={() => setShowCartModal(true)}
           >
             <ShoppingCart size={20} />
-            {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
+            <span className="cart-badge">{cartCount}</span>
           </button>
         </div>
       </header>
