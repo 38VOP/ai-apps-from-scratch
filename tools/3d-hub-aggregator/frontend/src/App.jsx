@@ -692,6 +692,10 @@ export default function App() {
         handleUpdateModelCategory={handleUpdateModelCategory}
         handleDeleteModel={handleDeleteModel}
         handleRefreshPreview={handleRefreshPreview}
+        projects={projects}
+        projectsExpanded={projectsExpanded}
+        setProjectsExpanded={setProjectsExpanded}
+        setActiveTab={setActiveTab}
       />
 
       <Projects

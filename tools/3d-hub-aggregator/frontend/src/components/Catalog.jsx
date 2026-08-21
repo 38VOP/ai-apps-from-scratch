@@ -6,7 +6,8 @@ export default function Catalog({
   loadingModels, selectedModel, currentPage, totalPages, catsExpanded,
   setCatsExpanded, setShowCatManagerModal, fetchUserCategories,
   setSelectedCategory, setSearchQuery, setCurrentPage, setSelectedModel,
-  handleAddToCart, handleUpdateModelCategory, handleDeleteModel, handleRefreshPreview
+  handleAddToCart, handleUpdateModelCategory, handleDeleteModel, handleRefreshPreview,
+  projects = [], projectsExpanded, setProjectsExpanded, setActiveTab
 }) {
   if (activeTab !== 'catalog') return null
 
@@ -36,6 +37,26 @@ export default function Catalog({
                     <Settings size={14} /><span>Налаштувати</span>
                   </button>
                 </>
+              )}
+            </div>
+
+            <div className="sidebar-section">
+              <div className="sidebar-section-header" onClick={() => { setProjectsExpanded(!projectsExpanded); setActiveTab('projects'); }}>
+                <div className="sidebar-title" style={{ marginBottom: 0 }}>Проекти</div>
+                <span className="collapse-icon">{projectsExpanded ? '−' : '+'}</span>
+              </div>
+              {projectsExpanded && (
+                <ul className="nav-list">
+                  {projects.length === 0 ? (
+                    <li className="nav-item"><span>Проектів ще немає</span></li>
+                  ) : (
+                    projects.map(proj => (
+                      <li key={proj.id} className="nav-item" onClick={() => setActiveTab('projects')}>
+                        <span>{proj.name}</span><span className="badge-count">{proj.item_count}</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
               )}
             </div>
           </div>
