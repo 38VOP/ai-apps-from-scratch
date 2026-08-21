@@ -42,12 +42,6 @@ export default function Catalog({
         </aside>
 
         <main className="content-area">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
-              Каталог моделей <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>({totalModels})</span>
-            </h2>
-          </div>
-
           {loadingModels ? (
             <div className="empty-state"><RefreshCw size={36} className="spin" /><p>Завантаження моделей...</p></div>
           ) : models.length === 0 ? (

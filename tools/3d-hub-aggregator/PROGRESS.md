@@ -49,3 +49,10 @@ ANCHOR.md: версії MOD-PARSER, MOD-SOURCES, MOD-CART, MOD-PROJECTS → v1.1
 Файли / commit: tools/3d-hub-aggregator/frontend/src/index.css, tools/3d-hub-aggregator/frontend/src/components/Catalog.jsx, tools/3d-hub-aggregator/PROGRESS.md
 Перевірка або відхилення: npm run build успішно виконано без помилок.
 
+Дата: 21.08.2026
+Агент: Antigravity
+Зроблено: У frontend/src/components/Catalog.jsx повністю прибрано заголовок "Каталог моделей (N)" разом з лічильником для чистішого вигляду робочої області.
+Файли / commit: tools/3d-hub-aggregator/frontend/src/components/Catalog.jsx, tools/3d-hub-aggregator/PROGRESS.md
+Перевірка або відхилення: npm run build успішно виконано (0 помилок).
+
+
