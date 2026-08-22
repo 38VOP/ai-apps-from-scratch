@@ -708,6 +708,7 @@ export default function App() {
         projectsExpanded={projectsExpanded}
         setProjectsExpanded={setProjectsExpanded}
         setActiveTab={setActiveTab}
+        fetchProjectDetail={fetchProjectDetail}
       />
 
       <Projects

@@ -7,7 +7,7 @@ export default function Catalog({
   setCatsExpanded, setShowCatManagerModal, fetchUserCategories,
   setSelectedCategory, setSearchQuery, setCurrentPage, setSelectedModel,
   handleAddToCart, handleUpdateModelCategory, handleDeleteModel, handleRefreshPreview,
-  projects = [], projectsExpanded, setProjectsExpanded, setActiveTab
+  projects = [], projectsExpanded, setProjectsExpanded, setActiveTab, fetchProjectDetail
 }) {
   if (activeTab !== 'catalog') return null
 
@@ -51,7 +51,7 @@ export default function Catalog({
                     <li className="nav-item"><span>Проектів ще немає</span></li>
                   ) : (
                     projects.map(proj => (
-                      <li key={proj.id} className="nav-item" onClick={() => setActiveTab('projects')}>
+                      <li key={proj.id} className="nav-item" onClick={() => { fetchProjectDetail(proj.id); setActiveTab('projects'); }}>
                         <span>{proj.name}</span><span className="badge-count">{proj.item_count}</span>
                       </li>
                     ))
