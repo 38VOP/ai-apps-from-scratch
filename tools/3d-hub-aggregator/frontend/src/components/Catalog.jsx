@@ -41,7 +41,7 @@ export default function Catalog({
             </div>
 
             <div className="sidebar-section">
-              <div className="sidebar-section-header" onClick={() => { setProjectsExpanded(!projectsExpanded); setActiveTab('projects'); }}>
+              <div className="sidebar-section-header" onClick={() => setProjectsExpanded(!projectsExpanded)}>
                 <div className="sidebar-title" style={{ marginBottom: 0 }}>Проекти</div>
                 <span className="collapse-icon">{projectsExpanded ? '−' : '+'}</span>
               </div>
