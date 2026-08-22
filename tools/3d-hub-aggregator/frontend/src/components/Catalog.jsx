@@ -8,7 +8,8 @@ export default function Catalog({
   setSelectedCategory, setSearchQuery, setCurrentPage, setSelectedModel,
   handleAddToCart, handleUpdateModelCategory, handleDeleteModel, handleRefreshPreview,
   projects = [], projectsExpanded, setProjectsExpanded, setActiveTab, fetchProjectDetail,
-  settingsExpanded, setSettingsExpanded
+  settingsExpanded, setSettingsExpanded,
+  fetchAccounts, fetchChannels, fetchAdminStats
 }) {
   if (activeTab !== 'catalog') return null
 
@@ -23,21 +24,16 @@ export default function Catalog({
                 <span className="collapse-icon">{catsExpanded ? '−' : '+'}</span>
               </div>
               {catsExpanded && (
-                <>
-                  <ul className="nav-list">
-                    <li className={"nav-item " + (selectedCategory === null ? 'active' : '')} onClick={() => { setSelectedCategory(null); setCurrentPage(1); }}>
-                      <span>Усі категорії</span><span className="badge-count">{totalModels}</span>
+                <ul className="nav-list">
+                  <li className={"nav-item " + (selectedCategory === null ? 'active' : '')} onClick={() => { setSelectedCategory(null); setCurrentPage(1); }}>
+                    <span>Усі категорії</span><span className="badge-count">{totalModels}</span>
+                  </li>
+                  {categories.filter(c => c.is_visible).map(cat => (
+                    <li key={cat.id} className={"nav-item " + (selectedCategory === cat.id ? 'active' : '')} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}>
+                      <span>{cat.name}</span><span className="badge-count">{cat.count}</span>
                     </li>
-                    {categories.filter(c => c.is_visible).map(cat => (
-                      <li key={cat.id} className={"nav-item " + (selectedCategory === cat.id ? 'active' : '')} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}>
-                        <span>{cat.name}</span><span className="badge-count">{cat.count}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button className="btn btn-secondary btn-sm" style={{ width: '100%', marginTop: 12, justifyContent: 'center' }} onClick={() => { fetchUserCategories(true); setShowCatManagerModal(true); }}>
-                    <Settings size={14} /><span>Налаштувати</span>
-                  </button>
-                </>
+                  ))}
+                </ul>
               )}
             </div>
 
@@ -68,11 +64,13 @@ export default function Catalog({
               </div>
               {settingsExpanded && (
                 <ul className="nav-list">
-                  {/* Каркас: реальний функціонал переноситься окремими задачами (п.5, п.17) */}
-                  <li className="nav-item" style={{ opacity: 0.5, cursor: 'default' }}>
+                  <li className="nav-item" onClick={() => { fetchUserCategories(true); setShowCatManagerModal(true); }}>
+                    <span>Категорії</span>
+                  </li>
+                  <li className="nav-item" onClick={() => { setActiveTab('sources'); fetchAccounts(); fetchChannels(); }}>
                     <span>Джерела</span>
                   </li>
-                  <li className="nav-item" style={{ opacity: 0.5, cursor: 'default' }}>
+                  <li className="nav-item" onClick={() => { setActiveTab('admin'); fetchAdminStats(); }}>
                     <span>Статистика</span>
                   </li>
                 </ul>

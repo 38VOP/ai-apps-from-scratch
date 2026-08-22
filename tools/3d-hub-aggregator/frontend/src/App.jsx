@@ -712,6 +712,9 @@ export default function App() {
         fetchProjectDetail={fetchProjectDetail}
         settingsExpanded={settingsExpanded}
         setSettingsExpanded={setSettingsExpanded}
+        fetchAccounts={fetchAccounts}
+        fetchChannels={fetchChannels}
+        fetchAdminStats={fetchAdminStats}
       />
 
       <Projects
