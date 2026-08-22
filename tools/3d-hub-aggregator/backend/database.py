@@ -104,7 +104,7 @@ class CartItem(Base):
     __tablename__ = "cart_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
+    model_id = Column(Integer, ForeignKey("models.id"), nullable=False, unique=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     model = relationship("ModelItem")
@@ -217,6 +217,17 @@ def migrate_sqlite_columns():
                 FOREIGN KEY (model_id) REFERENCES models(id)
             )
         """)
+
+    # QA-001: enforce one cart row per model. Existing installs have no UNIQUE
+    # constraint, so parallel POSTs could both pass the "already in cart" check
+    # and insert duplicates. Dedupe leftovers first, then add the unique index.
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='ux_cart_items_model_id'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            DELETE FROM cart_items
+            WHERE id NOT IN (SELECT MIN(id) FROM cart_items GROUP BY model_id)
+        """)
+        cursor.execute("CREATE UNIQUE INDEX ux_cart_items_model_id ON cart_items(model_id)")
 
     # Create projects table if not exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")

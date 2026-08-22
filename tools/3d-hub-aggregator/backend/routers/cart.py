@@ -2,6 +2,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from database import get_db, CartItem, ModelItem, Project, ProjectItem
 
@@ -44,7 +45,16 @@ def add_to_cart(body: dict, db: Session = Depends(get_db)):
         return {"success": True, "message": "Модель вже у кошику", "cart_item_id": existing.id}
     cart_item = CartItem(model_id=model_id)
     db.add(cart_item)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Гонка: паралельний запит устиг вставити цю ж модель між перевіркою і комітом.
+        # UNIQUE на cart_items.model_id не дає створити дубль — віддаємо наявний запис.
+        db.rollback()
+        existing = db.query(CartItem).filter(CartItem.model_id == model_id).first()
+        if existing:
+            return {"success": True, "message": "Модель вже у кошику", "cart_item_id": existing.id}
+        raise HTTPException(status_code=500, detail="Не вдалося додати модель до кошика")
     db.refresh(cart_item)
     return {"success": True, "message": "Модель додано до кошика", "cart_item_id": cart_item.id}
 
