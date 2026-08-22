@@ -498,14 +498,30 @@ body {
   gap: 24px;
 }
 
-.sources-container.sources-two-col > .sources-section {
+/* Accounts (left) carry a short card list; channels (right) carry a 7-column
+   table, so the right column gets twice the width. QA-012. */
+.sources-container.sources-two-col > .sources-section:first-child {
   flex: 1 1 0;
+  min-width: 0;
+}
+
+.sources-container.sources-two-col > .sources-section:nth-child(2) {
+  flex: 2 1 0;
   min-width: 0;
 }
 
 @media (max-width: 1000px) {
   .sources-container.sources-two-col {
     flex-direction: column;
+  }
+  /* Stacked flex items must be allowed to shrink, otherwise the wide table
+     stretches the section past the container. QA-012. */
+  .sources-container.sources-two-col > .sources-section {
+    width: 100%;
+    min-width: 0;
+  }
+  .table-scroll > .channels-table {
+    min-width: 700px;
   }
 }
 
@@ -591,6 +607,18 @@ body {
 .channels-table {
   width: 100%;
   border-collapse: collapse;
+}
+
+/* 8 columns do not fit at every viewport width, so the table scrolls inside its
+   own section instead of pushing the page sideways. Applies in both the
+   two-column and the stacked layout. QA-012. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.table-scroll > .channels-table {
+  min-width: 900px;
 }
 
 .channels-table th {

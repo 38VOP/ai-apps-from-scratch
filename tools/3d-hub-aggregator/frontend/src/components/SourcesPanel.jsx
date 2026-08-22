@@ -96,6 +96,7 @@ export default function SourcesPanel({
             {channels.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Список каналів порожній</p>
             ) : (
+              <div className="table-scroll">
               <table className="channels-table">
                 <thead>
                   <tr>
@@ -197,6 +198,7 @@ export default function SourcesPanel({
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>
