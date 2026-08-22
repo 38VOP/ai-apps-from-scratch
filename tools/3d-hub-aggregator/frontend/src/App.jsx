@@ -623,7 +623,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* TABS NAVIGATION */}
+        {/* TABS NAVIGATION — «Джерела» і «Статистика» доступні через сайдбар «Налаштування» */}
         <div className="nav-tabs">
           <button 
             className={`tab-btn ${activeTab === 'catalog' ? 'active' : ''}`}
@@ -631,20 +631,6 @@ export default function App() {
           >
             <Box size={18} />
             <span>Каталог</span>
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('sources'); fetchAccounts(); fetchChannels(); }}
-          >
-            <RadioTower size={18} />
-            <span>Джерела</span>
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('admin'); fetchAdminStats(); }}
-          >
-            <BarChart3 size={18} />
-            <span>Статистика</span>
           </button>
         </div>
 
