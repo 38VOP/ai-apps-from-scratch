@@ -725,6 +725,7 @@ export default function App() {
 
       <SourcesPanel
         activeTab={activeTab}
+        setActiveTab={setActiveTab}
         accounts={accounts}
         channels={channels}
         syncingChannelId={syncingChannelId}
@@ -759,6 +760,7 @@ export default function App() {
           adminStats={adminStats}
           fetchAdminStats={fetchAdminStats}
           getStatusLabel={getStatusLabel}
+          setActiveTab={setActiveTab}
         />
       )}
 

@@ -603,6 +603,30 @@ body {
   border: 1px solid rgba(244, 63, 94, 0.3);
 }
 
+/* Uniform back button on every sub-page (Sources / Stats / Projects). QA-009.
+   Returns to the catalog the same way the user came in — via the sidebar. */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  flex: 0 0 auto;
+  margin-bottom: 20px;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.back-btn:hover {
+  color: var(--text-main);
+  border-color: var(--border-hover);
+}
+
 /* Table styling for Channels */
 .channels-table {
   width: 100%;

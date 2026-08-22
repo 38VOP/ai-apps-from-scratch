@@ -1,8 +1,9 @@
 import React from 'react'
-import { ShieldCheck, RadioTower, Plus, Trash2, RefreshCw, X } from 'lucide-react'
+import { ShieldCheck, RadioTower, Plus, Trash2, RefreshCw, X, ArrowLeft } from 'lucide-react'
 
 export default function SourcesPanel({
   activeTab,
+  setActiveTab,
   accounts,
   channels,
   syncingChannelId,
@@ -36,6 +37,9 @@ export default function SourcesPanel({
   return (
     <>
       <main className="content-area" style={{ maxWidth: 1400, margin: '0 auto', width: '100%' }}>
+        <button className="back-btn" onClick={() => setActiveTab('catalog')}>
+          <ArrowLeft size={16} /><span>Назад</span>
+        </button>
         <div className="sources-container sources-two-col" style={{ maxWidth: '100%' }}>
           <div className="sources-section">
             <div className="section-header">
