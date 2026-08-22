@@ -7,7 +7,8 @@ export default function Catalog({
   setCatsExpanded, setShowCatManagerModal, fetchUserCategories,
   setSelectedCategory, setSearchQuery, setCurrentPage, setSelectedModel,
   handleAddToCart, handleUpdateModelCategory, handleDeleteModel, handleRefreshPreview,
-  projects = [], projectsExpanded, setProjectsExpanded, setActiveTab, fetchProjectDetail
+  projects = [], projectsExpanded, setProjectsExpanded, setActiveTab, fetchProjectDetail,
+  settingsExpanded, setSettingsExpanded
 }) {
   if (activeTab !== 'catalog') return null
 
@@ -56,6 +57,24 @@ export default function Catalog({
                       </li>
                     ))
                   )}
+                </ul>
+              )}
+            </div>
+
+            <div className="sidebar-section">
+              <div className="sidebar-section-header" onClick={() => setSettingsExpanded(!settingsExpanded)}>
+                <div className="sidebar-title" style={{ marginBottom: 0 }}>Налаштування</div>
+                <span className="collapse-icon">{settingsExpanded ? '−' : '+'}</span>
+              </div>
+              {settingsExpanded && (
+                <ul className="nav-list">
+                  {/* Каркас: реальний функціонал переноситься окремими задачами (п.5, п.17) */}
+                  <li className="nav-item" style={{ opacity: 0.5, cursor: 'default' }}>
+                    <span>Джерела</span>
+                  </li>
+                  <li className="nav-item" style={{ opacity: 0.5, cursor: 'default' }}>
+                    <span>Статистика</span>
+                  </li>
                 </ul>
               )}
             </div>

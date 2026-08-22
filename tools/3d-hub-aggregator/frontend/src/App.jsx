@@ -74,6 +74,7 @@ export default function App() {
   // Collapsible sidebar sections
   const [catsExpanded, setCatsExpanded] = useState(true)
   const [projectsExpanded, setProjectsExpanded] = useState(true)
+  const [settingsExpanded, setSettingsExpanded] = useState(true)
 
   useEffect(() => {
     fetchUserCategories()
@@ -709,6 +710,8 @@ export default function App() {
         setProjectsExpanded={setProjectsExpanded}
         setActiveTab={setActiveTab}
         fetchProjectDetail={fetchProjectDetail}
+        settingsExpanded={settingsExpanded}
+        setSettingsExpanded={setSettingsExpanded}
       />
 
       <Projects
