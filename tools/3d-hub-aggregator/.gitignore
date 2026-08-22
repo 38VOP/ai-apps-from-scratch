@@ -1,0 +1,20 @@
+# Local data — never tracked (SQLite catalog + generated previews).
+# Kept out of git because the running backend holds an open handle on the
+# database file: tracking it makes stash/rebase fail with "Invalid argument"
+# and risks destroying the live catalog.
+data/
+
+# Build output
+frontend/dist/
+
+# Python
+**/venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

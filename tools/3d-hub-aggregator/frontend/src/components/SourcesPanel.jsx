@@ -203,7 +203,8 @@ export default function SourcesPanel({
 
         {/* About / version block */}
         <div style={{
-          marginTop: 24,
+          marginTop: 16,
+          marginBottom: 16,
           padding: '12px 16px',
           borderRadius: 'var(--radius-md)',
           background: 'rgba(255,255,255,0.03)',
@@ -214,8 +215,8 @@ export default function SourcesPanel({
           fontSize: '0.78rem',
           color: 'var(--text-muted)'
         }}>
-          <span>3D Hub Aggregator v1.0.0</span>
-          <span>Build: 2026-08-20</span>
+          <span>3D Hub Aggregator · {__COMMIT_HASH__}</span>
+          <span>Build: {new Date(__BUILD_DATE__).toLocaleString('uk-UA')}</span>
         </div>
       </main>
 
