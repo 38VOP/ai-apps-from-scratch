@@ -490,6 +490,25 @@ body {
   max-width: 1100px;
 }
 
+/* Two-column layout: accounts left, channels right (SourcesPanel).
+   Falls back to a single column on narrow viewports. */
+.sources-container.sources-two-col {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.sources-container.sources-two-col > .sources-section {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+@media (max-width: 1000px) {
+  .sources-container.sources-two-col {
+    flex-direction: column;
+  }
+}
+
 .sources-section {
   background: var(--bg-panel);
   border: 1px solid var(--border-color);

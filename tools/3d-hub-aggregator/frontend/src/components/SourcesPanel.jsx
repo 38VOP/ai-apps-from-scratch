@@ -35,8 +35,8 @@ export default function SourcesPanel({
 
   return (
     <>
-      <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-        <div className="sources-container">
+      <main className="content-area" style={{ maxWidth: 1400, margin: '0 auto', width: '100%' }}>
+        <div className="sources-container sources-two-col" style={{ maxWidth: '100%' }}>
           <div className="sources-section">
             <div className="section-header">
               <div className="section-title">
