@@ -648,6 +648,18 @@ export default function App() {
 
         {/* CART & SEARCH */}
         <div className="header-right">
+          {activeTab === 'catalog' && (
+            <div className="search-box">
+              <Search className="search-icon" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Пошук моделей..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              />
+            </div>
+          )}
           <button 
             className="cart-btn"
             onClick={() => setShowCartModal(true)}
