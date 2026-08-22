@@ -215,8 +215,7 @@ export default function SourcesPanel({
           fontSize: '0.78rem',
           color: 'var(--text-muted)'
         }}>
-          <span>3D Hub Aggregator · {__COMMIT_HASH__}</span>
-          <span>Build: {new Date(__BUILD_DATE__).toLocaleString('uk-UA')}</span>
+          <span>{`3D Hub Aggregator · ${__COMMIT_HASH__} · ${new Date(__BUILD_DATE__).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`}</span>
         </div>
       </main>
 
