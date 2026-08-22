@@ -9,7 +9,8 @@ export default function Catalog({
   handleAddToCart, handleUpdateModelCategory, handleDeleteModel, handleRefreshPreview,
   projects = [], projectsExpanded, setProjectsExpanded, setActiveTab, fetchProjectDetail,
   settingsExpanded, setSettingsExpanded,
-  fetchAccounts, fetchChannels, fetchAdminStats
+  fetchAccounts, fetchChannels, fetchAdminStats,
+  pageSize, setPageSize
 }) {
   if (activeTab !== 'catalog') return null
 
@@ -114,9 +115,37 @@ export default function Catalog({
               </div>
               {totalPages > 1 && (
                 <div className="pagination">
+                  <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(1)}>«</button>
                   <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Попередня</button>
-                  <span className="page-info">Сторінка {currentPage} з {totalPages}</span>
+                  {(() => {
+                    // Вікно з 5 номерів навколо поточної сторінки, притиснуте до меж діапазону.
+                    const win = 5
+                    let from = Math.max(1, currentPage - Math.floor(win / 2))
+                    const to = Math.min(totalPages, from + win - 1)
+                    from = Math.max(1, to - win + 1)
+                    const pages = []
+                    for (let p = from; p <= to; p++) pages.push(p)
+                    return pages.map(p => (
+                      <button
+                        key={p}
+                        className={"btn btn-sm " + (p === currentPage ? 'btn-primary' : 'btn-secondary')}
+                        onClick={() => setCurrentPage(p)}
+                      >
+                        {p}
+                      </button>
+                    ))
+                  })()}
                   <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Наступна</button>
+                  <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}>»</button>
+                  <span className="page-info">{currentPage} з {totalPages}</span>
+                  <select
+                    className="form-select"
+                    style={{ width: 'auto', padding: '6px 10px', fontSize: '0.82rem' }}
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                  >
+                    {[12, 24, 48, 96].map(n => <option key={n} value={n}>{n} на стор.</option>)}
+                  </select>
                 </div>
               )}
             </>

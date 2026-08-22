@@ -26,6 +26,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [pageSize, setPageSize] = useState(24)
 
   // Sources State
   const [accounts, setAccounts] = useState([])
@@ -90,7 +91,7 @@ export default function App() {
     } else if (activeTab === 'admin') {
       fetchAdminStats()
     }
-  }, [activeTab, selectedCategory, searchQuery, currentPage])
+  }, [activeTab, selectedCategory, searchQuery, currentPage, pageSize])
 
   // --- API CALLS ---
 
@@ -101,7 +102,7 @@ export default function App() {
       if (searchQuery) params.append('search', searchQuery)
       if (selectedCategory) params.append('category_id', selectedCategory)
       params.append('page', currentPage)
-      params.append('limit', '24')
+      params.append('limit', String(pageSize))
 
       const res = await fetch(`/api/models?${params.toString()}`)
       const data = await res.json()
@@ -715,6 +716,8 @@ export default function App() {
         fetchAccounts={fetchAccounts}
         fetchChannels={fetchChannels}
         fetchAdminStats={fetchAdminStats}
+        pageSize={pageSize}
+        setPageSize={setPageSize}
       />
 
       <Projects

@@ -970,7 +970,8 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-top: 24px;
 }
 
