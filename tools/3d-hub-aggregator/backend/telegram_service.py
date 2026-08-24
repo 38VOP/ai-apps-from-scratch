@@ -34,9 +34,13 @@ class ParseTask:
 
 
 class MultiAccountTelegramServiceManager:
+    # Скільки секунд вважаємо надісланий код придатним. Telegram дає ~120 с;
+    # у цьому вікні повторний натиск кнопки не витрачає ліміт доставки.
+    CODE_TTL_SECONDS = 120
+
     def __init__(self):
         self.clients: Dict[int, Any] = {}
-        self.pending_auth: Dict[int, Dict[str, str]] = {}
+        self.pending_auth: Dict[int, Dict[str, Any]] = {}
         self.parse_queue: deque = deque()
         self.active_tasks: Dict[int, ParseTask] = {}
         self.account_last_used: Dict[int, datetime] = {}
@@ -109,36 +113,116 @@ class MultiAccountTelegramServiceManager:
 
     async def request_code(self, db: Session, account_id: int, phone_number: str) -> Dict[str, Any]:
         account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
-        if not account or not account.api_id or not account.api_hash:
+        if not account:
+            return {"success": False, "message": "Акаунт не знайдено"}
+        if not account.api_id or not account.api_hash:
             return {"success": False, "message": "Спочатку збережіть API ID та API Hash для цього акаунту"}
-        account.phone_number = phone_number.strip()
+
+        phone_number = (phone_number or "").strip()
+        if not phone_number:
+            return {"success": False, "message": "Вкажіть номер телефону"}
+        account.phone_number = phone_number
         db.commit()
+
+        # phone_code_hash у Telethon дійсний ЛИШЕ для того зʼєднання, яке його
+        # видало: новий клієнт під кожен натиск кнопки вбиває вже надісланий код.
+        # Тому поки попередня спроба свіжа — віддаємо той самий хеш і не турбуємо
+        # Telegram. Це також не витрачає ліміт способів доставки на номер.
+        pending = self.pending_auth.get(account_id)
+        if pending and pending.get("client") and pending.get("temp_phone") == phone_number:
+            age = (datetime.utcnow() - pending["created_at"]).total_seconds()
+            if age < self.CODE_TTL_SECONDS:
+                left = int(self.CODE_TTL_SECONDS - age)
+                return {
+                    "success": True,
+                    "message": (f"Код уже надіслано — перевірте Telegram. "
+                                f"Ще дійсний ~{left} с."),
+                    "phone_code_hash": pending["phone_code_hash"],
+                    "reused": True
+                }
+            # Код видихнув: просимо Telegram повторити на ТОМУ Ж зʼєднанні.
+            client = pending["client"]
+            try:
+                if not client.is_connected():
+                    await client.connect()
+                res = await client.send_code_request(phone_number)
+                pending["phone_code_hash"] = res.phone_code_hash
+                pending["created_at"] = datetime.utcnow()
+                return {
+                    "success": True,
+                    "message": "Код надіслано повторно. Дійсний ~120 секунд.",
+                    "phone_code_hash": res.phone_code_hash
+                }
+            except Exception as e:
+                # Resend вичерпано або зʼєднання зіпсоване — починаємо з чистого.
+                await self._drop_pending(account_id)
+                logger.warning(f"Resend failed for account {account_id}, restarting flow: {e}")
+
+        # Новий цикл авторизації: окремий клієнт на порожній сесії.
+        # Робочу сесію в БД НЕ чіпаємо, поки авторизація не завершиться успішно.
+        client = None
         try:
-            # Для переавторизації створюємо НОВУ сесію, інакше Telegram може відхилити запит
-            session = StringSession()
-            client = TelegramClient(session, int(account.api_id), account.api_hash)
+            client = TelegramClient(StringSession(), int(account.api_id), account.api_hash)
             await client.connect()
             res = await client.send_code_request(phone_number)
-            # Зберігаємо НОВИЙ phone_code_hash
-            if account_id not in self.pending_auth:
-                self.pending_auth[account_id] = {}
-            self.pending_auth[account_id][res.phone_code_hash] = {
+            self.pending_auth[account_id] = {
+                "client": client,
                 "phone_code_hash": res.phone_code_hash,
                 "temp_phone": phone_number,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.utcnow()
             }
-            # Зберігаємо нову сесію в БД
-            session_str = client.session.save()
-            account.session_string = session_str
-            db.commit()
-            # Зберігаємо клієнт для наступного використання
-            self.clients[account_id] = client
-            return {"success": True, "message": f"Код підтвердження надіслано у Telegram. Дійсний 120 секунд.", "phone_code_hash": res.phone_code_hash}
+            return {
+                "success": True,
+                "message": "Код підтвердження надіслано у Telegram. Дійсний ~120 секунд.",
+                "phone_code_hash": res.phone_code_hash
+            }
         except Exception as e:
-            err_msg = str(e)
-            if "already used" in err_msg:
-                return {"success": False, "message": "Telegram тимчасово обмежив запити. Зачекайте 10-15 хв і спробуйте знову."}
-            return {"success": False, "message": f"Помилка надсилання коду: {err_msg}"}
+            if client:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+            return {"success": False, "message": self._humanize_auth_error(e)}
+
+    async def _drop_pending(self, account_id: int):
+        """Закриває і прибирає незавершену спробу авторизації."""
+        pending = self.pending_auth.pop(account_id, None)
+        if pending and pending.get("client"):
+            try:
+                await pending["client"].disconnect()
+            except Exception:
+                pass
+
+    async def release_account(self, account_id: int):
+        """Повністю відпускає акаунт: робоче зʼєднання і незавершену авторизацію.
+        Викликається при видаленні акаунта, щоб не залишати відкритих сокетів."""
+        client = self.clients.pop(account_id, None)
+        if client is not None:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+        await self._drop_pending(account_id)
+        self.account_last_used.pop(account_id, None)
+
+    @staticmethod
+    def _humanize_auth_error(e: Exception) -> str:
+        """Технічну помилку Telegram — у дію, зрозумілу без документації."""
+        msg = str(e)
+        low = msg.lower()
+        if "all available options" in low or "already used" in low:
+            return ("Telegram вичерпав способи доставки коду на цей номер. "
+                    "Зачекайте 10–15 хв і спробуйте знову.")
+        if "flood" in low:
+            wait = getattr(e, "seconds", None)
+            if wait:
+                return f"Telegram обмежив запити → зачекайте ~{round(wait / 60, 1)} хв."
+            return "Telegram обмежив кількість запитів → зачекайте і спробуйте знову."
+        if "phone number invalid" in low:
+            return "Невірний формат номера. Приклад: +380671234567"
+        if "api_id" in low or "api_hash" in low:
+            return "Невірні API ID / API Hash — перевірте дані з my.telegram.org"
+        return f"Не вдалося надіслати код: {msg}"
 
     async def _save_session(self, client, db: Session, account_id: int):
         """Зберігає оновлену сесію Telethon назад у БД.
@@ -155,38 +239,59 @@ class MultiAccountTelegramServiceManager:
 
     async def sign_in(self, db: Session, account_id: int, code: str, phone_code_hash: str = None) -> Dict[str, Any]:
         pending = self.pending_auth.get(account_id)
-        if not pending:
-            return {"success": False, "message": "Запит коду застарів. Запитайте код знову."}
-        
-        # Якщо hash не передано — шукаємо серед останніх запитів
-        if not phone_code_hash:
-            # Беремо найсвіжіший hash
-            latest = sorted(pending.values(), key=lambda x: x.get("created_at", ""), reverse=True)[0]
-            phone_code_hash = latest["phone_code_hash"]
-            phone_number = latest["temp_phone"]
-        else:
-            entry = pending.get(phone_code_hash)
-            if not entry:
-                return {"success": False, "message": "Запит коду застарів. Запитайте код знову."}
-            phone_number = entry["temp_phone"]
-        
+        if not pending or not pending.get("client"):
+            return {"success": False, "message": "Спочатку натисніть «Запитати код»"}
+
+        code = (code or "").strip()
+        if not code:
+            return {"success": False, "message": "Введіть код з Telegram"}
+
+        # Код мусить підтверджуватись ТИМ САМИМ зʼєднанням, яке його запросило,
+        # інакше Telegram відповідає PhoneCodeExpired навіть на свіжий код.
+        client = pending["client"]
+        phone_number = pending["temp_phone"]
+        # Фронтенд може надіслати свій hash; актуальним вважаємо серверний.
+        active_hash = pending["phone_code_hash"]
+        if phone_code_hash and phone_code_hash != active_hash:
+            logger.info(f"Account {account_id}: client sent a stale phone_code_hash, using the current one")
+
         try:
-            client = await self.get_client_for_account(db, account_id)
-            if not client:
-                return {"success": False, "message": "Telegram клієнт недоступний"}
-            await client.sign_in(phone_number, code, phone_code_hash=phone_code_hash)
+            if not client.is_connected():
+                await client.connect()
+            await client.sign_in(phone_number, code, phone_code_hash=active_hash)
+
+            # Успіх: аж ТЕПЕР ця сесія стає робочою сесією акаунта.
             session_str = client.session.save()
             account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
             if account:
                 account.is_authorized = True
                 account.session_string = session_str
                 db.commit()
-            # Прибираючи використаний hash
-            if phone_code_hash in pending:
-                del pending[phone_code_hash]
+
+            # Авторизований клієнт переходить у робочий пул, pending закривається.
+            old = self.clients.get(account_id)
+            if old is not None and old is not client:
+                try:
+                    await old.disconnect()
+                except Exception:
+                    pass
+            self.clients[account_id] = client
+            self.pending_auth.pop(account_id, None)
+
             return {"success": True, "message": "Успішно авторизовано у Telegram!"}
+
         except Exception as e:
-            return {"success": False, "message": f"Помилка авторизації: {str(e)}"}
+            low = str(e).lower()
+            # Двофакторний пароль — окремий, ще не реалізований сценарій.
+            if "password" in low and "2fa" in low or "SessionPasswordNeeded" in type(e).__name__:
+                return {"success": False, "message": "Акаунт захищено паролем 2FA — цей спосіб входу поки не підтримується"}
+            if "expired" in low:
+                await self._drop_pending(account_id)
+                return {"success": False, "message": "Код прострочений → натисніть «Запитати код» і введіть новий"}
+            if "invalid" in low:
+                # Хеш ще живий: користувач може просто ввести код правильно.
+                return {"success": False, "message": "Невірний код — перевірте цифри та спробуйте ще раз"}
+            return {"success": False, "message": self._humanize_auth_error(e)}
 
     async def sync_channel_posts(self, db: Session, channel_db_id: int) -> Dict[str, Any]:
         channel = db.query(Channel).filter(Channel.id == channel_db_id).first()

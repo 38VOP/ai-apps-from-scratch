@@ -103,7 +103,7 @@ async def check_session_status(account_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/api/accounts/{account_id}")
-def delete_telegram_account(account_id: int, db: Session = Depends(get_db)):
+async def delete_telegram_account(account_id: int, db: Session = Depends(get_db)):
     acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
     if not acc:
         raise HTTPException(status_code=404, detail="Акаунт не знайдено")
@@ -114,9 +114,9 @@ def delete_telegram_account(account_id: int, db: Session = Depends(get_db)):
         {Channel.account_id: None}, synchronize_session=False
     )
 
-    # Активний Telethon-клієнт і незавершена авторизація більше не потрібні.
-    telegram_manager.clients.pop(account_id, None)
-    telegram_manager.pending_auth.pop(account_id, None)
+    # Закриваємо зʼєднання: і робоче, і незавершену спробу авторизації —
+    # інакше сокети Telethon залишаються відкритими до перезапуску процесу.
+    await telegram_manager.release_account(account_id)
 
     name = acc.name
     db.delete(acc)
