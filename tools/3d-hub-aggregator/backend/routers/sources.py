@@ -108,13 +108,13 @@ def delete_telegram_account(account_id: int, db: Session = Depends(get_db)):
     if not acc:
         raise HTTPException(status_code=404, detail="Акаунт не знайдено")
 
-    # Канали, привʼязані до цього акаунта, відвʼязуємо (не видаляємо разом з ним) —
-    # моделі й історія сканування каналу мусять зберегтися.
+    # Канали переживають свій акаунт: моделі та історія сканування належать
+    # каналу, не акаунту. Відвʼязуємо, щоб їх можна було перепризначити.
     detached = db.query(Channel).filter(Channel.account_id == account_id).update(
         {Channel.account_id: None}, synchronize_session=False
     )
 
-    # Активний Telethon-клієнт цього акаунта більше не потрібен.
+    # Активний Telethon-клієнт і незавершена авторизація більше не потрібні.
     telegram_manager.clients.pop(account_id, None)
     telegram_manager.pending_auth.pop(account_id, None)
 
@@ -215,9 +215,3 @@ def delete_channel(channel_id: int, db: Session = Depends(get_db)):
 async def sync_channel(channel_id: int, db: Session = Depends(get_db)):
     res = await telegram_manager.queue_channel(db, channel_id)
     return res
-
-    if not acc:
-        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
-    db.delete(acc)
-    db.commit()
-    return {"success": True, "message": "Акаунт видалено"}
