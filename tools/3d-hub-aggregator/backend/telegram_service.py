@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from collections import deque
@@ -174,7 +175,8 @@ class MultiAccountTelegramServiceManager:
             }
             logger.info(
                 f"Account {account_id}: code requested for {phone_number}, "
-                f"delivery={info['delivery']}, fallback={info['has_fallback']}"
+                f"delivery={info['delivery']}, fallback={info['has_fallback']}, "
+                f"client=0x{id(client):x}, hash={res.phone_code_hash}"
             )
             return {
                 "success": True,
@@ -212,16 +214,37 @@ class MultiAccountTelegramServiceManager:
         """Технічну помилку Telegram — у дію, зрозумілу без документації."""
         msg = str(e)
         low = msg.lower()
+
+        # FloodWaitError несе точний час очікування в .seconds, але його текст
+        # виглядає як "A wait of 22713 seconds is required" — без слова flood,
+        # тому перевіряти тільку підрядок недостатньо.
+        wait = getattr(e, "seconds", None)
+        if wait is None:
+            m = re.search(r"wait of (\d+) seconds", low)
+            if m:
+                wait = int(m.group(1))
+        if wait:
+            if wait >= 3600:
+                h = wait // 3600
+                m_ = (wait % 3600) // 60
+                left = f"{h} год {m_} хв" if m_ else f"{h} год"
+            elif wait >= 60:
+                left = f"{wait // 60} хв"
+            else:
+                left = f"{wait} с"
+            return (f"Telegram заблокував запити для цього номера на {left}. "
+                    f"Це ліміт на боці Telegram — скористайтеся іншим номером "
+                    f"або зачекайте.")
+
         if "all available options" in low or "already used" in low:
             return ("Telegram вичерпав способи доставки коду на цей номер. "
                     "Зачекайте 10–15 хв і спробуйте знову.")
         if "flood" in low:
-            wait = getattr(e, "seconds", None)
-            if wait:
-                return f"Telegram обмежив запити → зачекайте ~{round(wait / 60, 1)} хв."
             return "Telegram обмежив кількість запитів → зачекайте і спробуйте знову."
         if "phone number invalid" in low:
             return "Невірний формат номера. Приклад: +380671234567"
+        if "phone number banned" in low:
+            return "Цей номер заблокований у Telegram."
         if "api_id" in low or "api_hash" in low:
             return "Невірні API ID / API Hash — перевірте дані з my.telegram.org"
         return f"Не вдалося надіслати код: {msg}"
@@ -253,6 +276,10 @@ class MultiAccountTelegramServiceManager:
             client = await self.get_client_for_account(db, account_id)
             if not client:
                 return {"success": False, "message": "Telegram клієнт недоступний"}
+            logger.info(
+                f"Account {account_id}: sign_in with client=0x{id(client):x}, "
+                f"hash={pending['phone_code_hash']}, code_len={len(code)}"
+            )
             await client.sign_in(
                 pending["temp_phone"], code, phone_code_hash=pending["phone_code_hash"]
             )
