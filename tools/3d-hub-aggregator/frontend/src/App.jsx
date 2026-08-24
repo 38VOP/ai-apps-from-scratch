@@ -426,24 +426,6 @@ export default function App() {
     }
   }
 
-  // Крок коду не має бути тупиком: якщо номер не приймає код, користувач
-  // мусить мати змогу повернутися і вказати інший, не видаляючи акаунт.
-  const handleChangePhone = async () => {
-    if (accCreatedId) {
-      // Скидаємо незавершену авторизацію на сервері, щоб зайняте
-      // зʼєднання не заважало новому номеру.
-      try {
-        await fetch(`/api/accounts/${accCreatedId}/cancel-auth`, { method: 'POST' })
-      } catch (err) {
-        console.error('Error cancelling auth:', err)
-      }
-    }
-    setAccCode('')
-    setAccPhoneCodeHash(null)
-    setAccStep('config')
-    setAccMsg('Вкажіть інший номер телефону і збережіть знову')
-  }
-
   // Єдина точка закриття: чистить увесь стан майстра, щоб наступне
   // відкриття не успадкувало чужий крок, код чи повідомлення.
   const closeAccountModal = () => {
@@ -788,7 +770,6 @@ export default function App() {
         handleAddAccountSubmit={handleAddAccountSubmit}
         handleVerifyAccCode={handleVerifyAccCode}
         handleRequestAccCode={handleRequestAccCode}
-        handleChangePhone={handleChangePhone}
         openAccountModal={openAccountModal}
         closeAccountModal={closeAccountModal}
         handleDeleteAccount={handleDeleteAccount}

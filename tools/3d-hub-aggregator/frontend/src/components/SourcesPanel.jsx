@@ -24,7 +24,6 @@ export default function SourcesPanel({
   handleAddAccountSubmit,
   handleVerifyAccCode,
   handleRequestAccCode,
-  handleChangePhone,
   openAccountModal,
   closeAccountModal,
   handleDeleteAccount,
@@ -390,22 +389,13 @@ export default function SourcesPanel({
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
                   <button type="button" className="btn btn-secondary" onClick={() => handleRequestAccCode(accCreatedId)}>
                     Запитати код
                   </button>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <button type="button" className="btn btn-secondary" onClick={handleChangePhone}>
-                      Інший номер
-                    </button>
-                    <button type="submit" className="btn btn-primary">
-                      Підтвердити та увійти
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{fontSize:'0.75rem',color:'var(--text-muted)',marginTop:12,textAlign:'center'}}>
-                  Номер не приймає код? «Інший номер» повертає до налаштувань — акаунт залишається.
+                  <button type="submit" className="btn btn-primary">
+                    Підтвердити та увійти
+                  </button>
                 </div>
               </form>
             )}
