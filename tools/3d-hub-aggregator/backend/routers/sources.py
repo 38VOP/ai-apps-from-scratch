@@ -19,6 +19,7 @@ class AccountCreate(BaseModel):
 
 class AccountCodeRequest(BaseModel):
     code: str
+    phone_code_hash: Optional[str] = None
 
 
 class ChannelCreate(BaseModel):
@@ -80,8 +81,25 @@ async def request_account_code(account_id: int, db: Session = Depends(get_db)):
 
 @router.post("/api/accounts/{account_id}/sign-in")
 async def sign_in_account(account_id: int, body: AccountCodeRequest, db: Session = Depends(get_db)):
-    res = await telegram_manager.sign_in(db, account_id, body.code)
+    res = await telegram_manager.sign_in(db, account_id, body.code, body.phone_code_hash)
     return res
+
+
+@router.get("/api/accounts/{account_id}/session-status")
+async def check_session_status(account_id: int, db: Session = Depends(get_db)):
+    """Повертає стан сесії: valid (працює), expired (застаріла), none (відсутня)."""
+    acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
+    if not acc.session_string:
+        return {"status": "none", "message": "Сесія відсутня"}
+    try:
+        client = await telegram_manager.get_client_for_account(db, account_id)
+        if client and await client.is_user_authorized():
+            return {"status": "valid", "message": "Сесія активна"}
+        return {"status": "expired", "message": "Сесія застаріла"}
+    except Exception:
+        return {"status": "expired", "message": "Сесія застаріла"}
 
 
 @router.delete("/api/accounts/{account_id}")

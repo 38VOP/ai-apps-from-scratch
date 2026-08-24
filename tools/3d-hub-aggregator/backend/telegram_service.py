@@ -114,30 +114,76 @@ class MultiAccountTelegramServiceManager:
         account.phone_number = phone_number.strip()
         db.commit()
         try:
-            client = await self.get_client_for_account(db, account_id)
-            if not client:
-                return {"success": False, "message": "Не вдалося ініціалізувати Telegram клієнт"}
+            # Для переавторизації створюємо НОВУ сесію, інакше Telegram може відхилити запит
+            session = StringSession()
+            client = TelegramClient(session, int(account.api_id), account.api_hash)
+            await client.connect()
             res = await client.send_code_request(phone_number)
-            self.pending_auth[account_id] = {"phone_code_hash": res.phone_code_hash, "temp_phone": phone_number}
-            return {"success": True, "message": "Код підтвердження надіслано в Telegram"}
+            # Зберігаємо НОВИЙ phone_code_hash
+            if account_id not in self.pending_auth:
+                self.pending_auth[account_id] = {}
+            self.pending_auth[account_id][res.phone_code_hash] = {
+                "phone_code_hash": res.phone_code_hash,
+                "temp_phone": phone_number,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            # Зберігаємо нову сесію в БД
+            session_str = client.session.save()
+            account.session_string = session_str
+            db.commit()
+            # Зберігаємо клієнт для наступного використання
+            self.clients[account_id] = client
+            return {"success": True, "message": f"Код підтвердження надіслано у Telegram. Дійсний 120 секунд.", "phone_code_hash": res.phone_code_hash}
         except Exception as e:
-            return {"success": False, "message": f"Помилка надсилання коду: {str(e)}"}
+            err_msg = str(e)
+            if "already used" in err_msg:
+                return {"success": False, "message": "Telegram тимчасово обмежив запити. Зачекайте 10-15 хв і спробуйте знову."}
+            return {"success": False, "message": f"Помилка надсилання коду: {err_msg}"}
 
-    async def sign_in(self, db: Session, account_id: int, code: str) -> Dict[str, Any]:
+    async def _save_session(self, client, db: Session, account_id: int):
+        """Зберігає оновлену сесію Telethon назад у БД.
+        Telethon оновлює сесію всередині після кожної операції (для безпеки),
+        але не зберігає її автоматично — це треба робити вручну."""
+        try:
+            session_str = client.session.save()
+            account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+            if account and account.session_string != session_str:
+                account.session_string = session_str
+                db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to save session for account {account_id}: {e}")
+
+    async def sign_in(self, db: Session, account_id: int, code: str, phone_code_hash: str = None) -> Dict[str, Any]:
         pending = self.pending_auth.get(account_id)
         if not pending:
             return {"success": False, "message": "Запит коду застарів. Запитайте код знову."}
+        
+        # Якщо hash не передано — шукаємо серед останніх запитів
+        if not phone_code_hash:
+            # Беремо найсвіжіший hash
+            latest = sorted(pending.values(), key=lambda x: x.get("created_at", ""), reverse=True)[0]
+            phone_code_hash = latest["phone_code_hash"]
+            phone_number = latest["temp_phone"]
+        else:
+            entry = pending.get(phone_code_hash)
+            if not entry:
+                return {"success": False, "message": "Запит коду застарів. Запитайте код знову."}
+            phone_number = entry["temp_phone"]
+        
         try:
             client = await self.get_client_for_account(db, account_id)
             if not client:
                 return {"success": False, "message": "Telegram клієнт недоступний"}
-            await client.sign_in(pending["temp_phone"], code, phone_code_hash=pending["phone_code_hash"])
+            await client.sign_in(phone_number, code, phone_code_hash=phone_code_hash)
             session_str = client.session.save()
             account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
             if account:
                 account.is_authorized = True
                 account.session_string = session_str
                 db.commit()
+            # Прибираючи використаний hash
+            if phone_code_hash in pending:
+                del pending[phone_code_hash]
             return {"success": True, "message": "Успішно авторизовано у Telegram!"}
         except Exception as e:
             return {"success": False, "message": f"Помилка авторизації: {str(e)}"}
@@ -158,25 +204,25 @@ class MultiAccountTelegramServiceManager:
 
         account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first() if account_id else None
         if not account or not account.is_authorized:
-            best_id = self._get_best_account(db)
-            if best_id:
-                account_id = best_id
-                channel.account_id = best_id
-                db.commit()
-            else:
-                channel.status = "error"
-                channel.scan_mode = "idle"
-                channel.status_message = "Акаунт не авторизований, синхронізація неможлива"
-                db.commit()
-                return {"success": False, "message": "Акаунт не авторизований, синхронізація неможлива", "added_count": 0}
+                    best_id = self._get_best_account(db)
+                    if best_id:
+                        account_id = best_id
+                        channel.account_id = best_id
+                        db.commit()
+                    else:
+                        channel.status = "error"
+                        channel.scan_mode = "idle"
+                        channel.status_message = "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований"
+                        db.commit()
+                        return {"success": False, "message": "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований", "added_count": 0}
 
         client = await self.get_client_for_account(db, account_id) if account_id else None
         if not client or not await client.is_user_authorized():
             channel.status = "error"
             channel.scan_mode = "idle"
-            channel.status_message = "Акаунт не авторизований, синхронізація неможлива"
+            channel.status_message = "Увійдіть у Telegram у розділі Джерела — сесія недійсна"
             db.commit()
-            return {"success": False, "message": "Акаунт не авторизований, синхронізація неможлива", "added_count": 0}
+            return {"success": False, "message": "Увійдіть у Telegram у розділі Джерела — сесія недійсна", "added_count": 0}
 
         is_initial_scan = not channel.initial_scan_completed
         if is_initial_scan:
@@ -282,6 +328,7 @@ class MultiAccountTelegramServiceManager:
                 channel.last_scanned_id = highest_msg_id
             channel.processed_count = db.query(ModelItem).filter(ModelItem.channel_id == channel.id).count()
             db.commit()
+            await self._save_session(client, db, account_id)
             scan_type_name = "Первинне сканування" if is_initial_scan else "Оновлення"
             return {"success": True, "message": f"{scan_type_name} завершено: додано {new_items_count} нових 3D моделей", "added_count": new_items_count}
 
@@ -294,15 +341,16 @@ class MultiAccountTelegramServiceManager:
                 channel.processed_count = db.query(ModelItem).filter(ModelItem.channel_id == channel.id).count()
             channel.status = "error"
             channel.scan_mode = "idle"
-            channel.status_message = f"FloodWait: зачекайте ~{wait_minutes} хв."
+            channel.status_message = "Telegram обмежив запити → зачекайте ~{wait_minutes} хв., продовжиться само"
             channel.last_synced_at = datetime.utcnow()
             db.commit()
+            await self._save_session(client, db, account_id)
             return {"success": False, "message": f"Telegram обмежив запити. Прогрес збережено ({new_items_count} моделей). Зачекайте ~{wait_minutes} хв.", "added_count": new_items_count}
 
         except (UserDeactivatedBanError, AuthKeyUnregisteredError) as auth_err:
             channel.status = "error"
             channel.scan_mode = "idle"
-            channel.status_message = "Сесія Telegram недійсна. Переавторизуйте акаунт."
+            channel.status_message = "Сесія застаріла → переавторизуйте акаунт у розділі Джерела"
             db.commit()
             return {"success": False, "message": "Сесія Telegram більше не дійсна. Переавторизуйте акаунт."}
 
@@ -313,9 +361,10 @@ class MultiAccountTelegramServiceManager:
                 channel.processed_count = db.query(ModelItem).filter(ModelItem.channel_id == channel.id).count()
             channel.status = "error"
             channel.scan_mode = "idle"
-            channel.status_message = f"Помилка: {str(e)[:80]}"
+            channel.status_message = f"Збій синхронізації → перевірте канал або спробуйте пізніше ({str(e)[:60]})"
             channel.last_synced_at = datetime.utcnow()
             db.commit()
+            await self._save_session(client, db, account_id)
             logger.error(f"Error scanning channel {channel.id}: {e}")
             return {"success": False, "message": f"Помилка сканування каналу: {str(e)}"}
 
@@ -336,9 +385,9 @@ class MultiAccountTelegramServiceManager:
                 db.commit()
             else:
                 channel.status = "error"
-                channel.status_message = "Акаунт не авторизований, синхронізація неможлива"
+                channel.status_message = "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований"
                 db.commit()
-                return {"success": False, "message": "Акаунт не авторизований, синхронізація неможлива"}
+        return {"success": False, "message": "Акаунт не авторизований, синхронізація неможлива"}
         mode = "backlog" if not channel.initial_scan_completed else "monitoring"
         task = ParseTask(channel_id=channel_id, account_id=account_id, mode=mode)
         self.parse_queue.append(task)

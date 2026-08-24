@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { ShieldCheck, RadioTower, Plus, Trash2, RefreshCw, X, ArrowLeft } from 'lucide-react'
 
 export default function SourcesPanel({
@@ -32,13 +32,47 @@ export default function SourcesPanel({
   handleSyncChannel,
   getStatusLabel
 }) {
+  const [sessionStatuses, setSessionStatuses] = useState({})
+  const [cardMessages, setCardMessages] = useState({})
+
+  const handleCardReauth = async (acc) => {
+    if (!acc.phone_number) {
+      setCardMessages(prev => ({ ...prev, [acc.id]: { type: 'error', text: 'Вкажіть номер телефону в налаштуваннях акаунту' } }))
+      return
+    }
+    setCardMessages(prev => ({ ...prev, [acc.id]: { type: 'info', text: 'Надсилання коду...' } }))
+    try {
+      const res = await fetch(`/api/accounts/${acc.id}/request-code`, { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        setCardMessages(prev => ({ ...prev, [acc.id]: { type: 'success', text: 'Код надіслано! Перевірте Telegram.' } }))
+      } else {
+        setCardMessages(prev => ({ ...prev, [acc.id]: { type: 'error', text: data.message } }))
+      }
+    } catch (err) {
+      setCardMessages(prev => ({ ...prev, [acc.id]: { type: 'error', text: 'Помилка зєднання' } }))
+    }
+  }
+
+  useEffect(() => {
+    accounts.forEach(async (acc) => {
+      try {
+        const res = await fetch(`/api/accounts/${acc.id}/session-status`)
+        const data = await res.json()
+        setSessionStatuses(prev => ({ ...prev, [acc.id]: data.status }))
+      } catch {
+        setSessionStatuses(prev => ({ ...prev, [acc.id]: 'error' }))
+      }
+    })
+  }, [accounts.length])
+
   if (activeTab !== 'sources') return null
 
   return (
     <>
       <main className="content-area" style={{ maxWidth: 1400, margin: '0 auto', width: '100%' }}>
-        <button className="back-btn" onClick={() => setActiveTab('catalog')}>
-          <ArrowLeft size={16} /><span>Назад</span>
+        <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Назад до каталогу">
+          <ArrowLeft size={16} />
         </button>
         <div className="sources-container sources-two-col" style={{ maxWidth: '100%' }}>
           <div className="sources-section">
@@ -57,30 +91,59 @@ export default function SourcesPanel({
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Немає підключених акаунтів</p>
             ) : (
               <div className="accounts-grid">
-                {accounts.map(acc => (
-                  <div key={acc.id} className="account-card">
-                    <div className="account-header">
-                      <span className="account-name">{acc.name}</span>
-                      <span className={`status-pill ${acc.is_authorized ? 'active' : 'idle'}`}>
-                        {acc.is_authorized ? '🟢 З\'єднано' : '⚪ Не авторизовано'}
-                      </span>
-                    </div>
+                {accounts.map(acc => {
+                  const sess = sessionStatuses[acc.id]
+                  return (
+                    <div key={acc.id} className="account-card">
+                      <div className="account-header">
+                        <span className="account-name">{acc.name}</span>
+                        <span className={`status-pill ${acc.is_authorized ? 'active' : 'idle'}`}>
+                          {acc.is_authorized ? '🟢 З\'єднано' : '⚪ Не авторизовано'}
+                        </span>
+                      </div>
 
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      Телефон: {acc.phone_number || 'Не вказано'}
-                    </div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>
-                      Прив'язано каналів: {acc.channels_count}
-                    </div>
+                      {sess === 'expired' && (
+                        <div style={{marginTop:6,fontSize:'0.78rem',color:'#f59e0b',display:'flex',alignItems:'center',gap:4}}>
+                          ⚠️ Сесія застаріла
+                        </div>
+                      )}
+                      {sess === 'none' && (
+                        <div style={{marginTop:6,fontSize:'0.78rem',color:'var(--text-muted)'}}>
+                          Сесія відсутня
+                        </div>
+                      )}
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDeleteAccount(acc.id)}>
-                        <Trash2 size={14} />
-                        <span>Видалити</span>
-                      </button>
+                      {cardMessages[acc.id] && (
+                        <div style={{
+                          marginTop: 6,
+                          fontSize: '0.78rem',
+                          color: cardMessages[acc.id].type === 'error' ? '#ef4444' :
+                                 cardMessages[acc.id].type === 'success' ? '#22c55e' : 'var(--text-muted)'
+                        }}>
+                          {cardMessages[acc.id].text}
+                        </div>
+                      )}
+
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Телефон: {acc.phone_number || 'Не вказано'}
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)' }}>
+                        Прив'язано каналів: {acc.channels_count}
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                        <button className="btn btn-secondary btn-sm" style={{fontSize:'0.75rem',padding:'4px 8px'}} onClick={() => handleCardReauth(acc)} disabled={!acc.phone_number}>
+                          <RefreshCw size={12} />
+                          <span>Переавторизувати</span>
+                        </button>
+                        <button className="btn btn-danger btn-sm" onClick={() => handleDeleteAccount(acc.id)}>
+                          <Trash2 size={14} />
+                          <span>Видалити</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -139,13 +202,18 @@ export default function SourcesPanel({
                       </td>
 
                       <td>
-                        <span className={`status-pill ${
-                          ch.status === 'queued' ? 'idle' :
-                          ch.status === 'backlog' ? 'idle' :
-                          ch.status === 'monitoring' || ch.status === 'up_to_date' ? 'active' :
-                          ch.status === 'error' ? 'error' : 'idle'
-                        }`}>
+                        <span
+                          className={`status-pill ${
+                            ch.status === 'queued' ? 'idle' :
+                            ch.status === 'backlog' ? 'idle' :
+                            ch.status === 'monitoring' || ch.status === 'up_to_date' ? 'active' :
+                            ch.status === 'error' ? 'error' : 'idle'
+                          }`}
+                          title={ch.status_message || getStatusLabel(ch.status)}
+                          style={{ cursor: ch.status_message ? 'help' : 'default' }}
+                        >
                           {getStatusLabel(ch.status)}
+                          {ch.status_message && ch.status === 'error' && <span style={{marginLeft:4,fontSize:'0.7em'}}>ⓘ</span>}
                         </span>
                       </td>
 
@@ -309,15 +377,18 @@ export default function SourcesPanel({
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="12345"
+                    placeholder="Введіть код з Telegram"
                     value={accCode}
                     onChange={e => setAccCode(e.target.value)}
                     autoFocus
                   />
+                  <div style={{fontSize:'0.75rem',color:'var(--text-muted)',marginTop:6}}>
+                    Код дійсний 120 секунд. Якщо не прийшов — натисніть "Запитати код" знову.
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-                  <button type="button" className="btn btn-secondary" onClick={handleRequestAccCode}>
+                  <button type="button" className="btn btn-secondary" onClick={() => handleRequestAccCode(accCreatedId)}>
                     Запитати код
                   </button>
                   <button type="submit" className="btn btn-primary">

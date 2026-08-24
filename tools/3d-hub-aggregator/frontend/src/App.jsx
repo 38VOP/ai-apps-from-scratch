@@ -63,6 +63,7 @@ export default function App() {
   const [accStep, setAccStep] = useState('config')
   const [accCreatedId, setAccCreatedId] = useState(null)
   const [accCode, setAccCode] = useState('')
+  const [accPhoneCodeHash, setAccPhoneCodeHash] = useState(null)
   const [accMsg, setAccMsg] = useState('')
 
   // Channel Form
@@ -379,12 +380,12 @@ export default function App() {
     }
   }
 
-  const handleRequestAccCode = async () => {
-    if (!accCreatedId) return
+  const handleRequestAccCode = async (account_id) => {
     setAccMsg('Надсилання коду у Telegram...')
     try {
-      const res = await fetch(`/api/accounts/${accCreatedId}/request-code`, { method: 'POST' })
+      const res = await fetch(`/api/accounts/${account_id}/request-code`, { method: 'POST' })
       const data = await res.json()
+      if (data.phone_code_hash) setAccPhoneCodeHash(data.phone_code_hash)
       setAccMsg(data.message)
     } catch (err) {
       setAccMsg('Помилка надсилання коду')
@@ -398,7 +399,7 @@ export default function App() {
       const res = await fetch(`/api/accounts/${accCreatedId}/sign-in`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: accCode })
+        body: JSON.stringify({ code: accCode, phone_code_hash: accPhoneCodeHash })
       })
       const data = await res.json()
       setAccMsg(data.message)
@@ -621,17 +622,6 @@ export default function App() {
             <h1 className="logo-title">3D Hub Aggregator</h1>
             <p className="logo-subtitle">Каталог моделей з Telegram для 3ds Max</p>
           </div>
-        </div>
-
-        {/* TABS NAVIGATION — «Джерела» і «Статистика» доступні через сайдбар «Налаштування» */}
-        <div className="nav-tabs">
-          <button 
-            className={`tab-btn ${activeTab === 'catalog' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('catalog'); setCurrentPage(1); fetchUserCategories(); }}
-          >
-            <Box size={18} />
-            <span>Каталог</span>
-          </button>
         </div>
 
         {/* CART & SEARCH */}
