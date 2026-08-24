@@ -105,6 +105,27 @@ async def check_session_status(account_id: int, db: Session = Depends(get_db)):
 @router.delete("/api/accounts/{account_id}")
 def delete_telegram_account(account_id: int, db: Session = Depends(get_db)):
     acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
+
+    # Канали, привʼязані до цього акаунта, відвʼязуємо (не видаляємо разом з ним) —
+    # моделі й історія сканування каналу мусять зберегтися.
+    detached = db.query(Channel).filter(Channel.account_id == account_id).update(
+        {Channel.account_id: None}, synchronize_session=False
+    )
+
+    # Активний Telethon-клієнт цього акаунта більше не потрібен.
+    telegram_manager.clients.pop(account_id, None)
+    telegram_manager.pending_auth.pop(account_id, None)
+
+    name = acc.name
+    db.delete(acc)
+    db.commit()
+    return {
+        "success": True,
+        "message": f"Акаунт «{name}» видалено",
+        "detached_channels": detached
+    }
 
 
 @router.get("/api/channels")
