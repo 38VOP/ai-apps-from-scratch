@@ -45,15 +45,14 @@ export default function Catalog({
               </div>
               {projectsExpanded && (
                 <ul className="nav-list">
-                  {projects.length === 0 ? (
-                    <li className="nav-item"><span>Проектів ще немає</span></li>
-                  ) : (
-                    projects.map(proj => (
-                      <li key={proj.id} className="nav-item" onClick={() => { fetchProjectDetail(proj.id); setActiveTab('projects'); }}>
-                        <span>{proj.name}</span><span className="badge-count">{proj.item_count}</span>
-                      </li>
-                    ))
-                  )}
+                  <li className="nav-item" onClick={() => setActiveTab('projects')}>
+                    <span>Усі проекти</span><span className="badge-count">{projects.length}</span>
+                  </li>
+                  {projects.map(proj => (
+                    <li key={proj.id} className="nav-item" onClick={() => { fetchProjectDetail(proj.id); setActiveTab('projects'); }}>
+                      <span>{proj.name}</span><span className="badge-count">{proj.item_count}</span>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
