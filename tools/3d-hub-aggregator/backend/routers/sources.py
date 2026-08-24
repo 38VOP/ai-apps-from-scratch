@@ -102,6 +102,53 @@ async def check_session_status(account_id: int, db: Session = Depends(get_db)):
         return {"status": "expired", "message": "Сесія застаріла"}
 
 
+@router.patch("/api/accounts/{account_id}")
+async def update_telegram_account(account_id: int, body: AccountCreate, db: Session = Depends(get_db)):
+    """Оновлює дані акаунта до успішної авторизації.
+
+    Потрібне для сценарію «номер не приймає код → вказати інший»: акаунт уже
+    створено, тому повторне збереження форми мусить правити існуючий запис,
+    а не плодити дублі.
+    """
+    acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
+
+    new_phone = body.phone_number.strip()
+    if not new_phone:
+        raise HTTPException(status_code=400, detail="Вкажіть номер телефону")
+
+    # Зміна номера робить попередню сесію і незавершену авторизацію
+    # безглуздими — вони належали іншому номеру.
+    if new_phone != (acc.phone_number or ""):
+        await telegram_manager.release_account(account_id)
+        acc.session_string = None
+        acc.is_authorized = False
+
+    if body.name.strip():
+        acc.name = body.name.strip()
+    acc.api_id = body.api_id.strip()
+    acc.api_hash = body.api_hash.strip()
+    acc.phone_number = new_phone
+    db.commit()
+    db.refresh(acc)
+    return {"id": acc.id, "name": acc.name, "message": "Дані акаунта оновлено"}
+
+
+@router.post("/api/accounts/{account_id}/cancel-auth")
+async def cancel_account_auth(account_id: int, db: Session = Depends(get_db)):
+    """Скидає незавершену спробу авторизації.
+
+    Без цього зайняте зʼєднання Telethon тримає phone_code_hash старого
+    номера і мовчки заважає почати заново з іншим.
+    """
+    acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
+    await telegram_manager.cancel_pending_auth(account_id)
+    return {"success": True, "message": "Спробу авторизації скасовано"}
+
+
 @router.delete("/api/accounts/{account_id}")
 async def delete_telegram_account(account_id: int, db: Session = Depends(get_db)):
     acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()

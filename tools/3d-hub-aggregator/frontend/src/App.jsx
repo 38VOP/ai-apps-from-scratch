@@ -359,21 +359,33 @@ export default function App() {
 
   const handleAddAccountSubmit = async (e) => {
     e.preventDefault()
+    if (!accForm.phone_number.trim()) {
+      setAccMsg('Вкажіть номер телефону')
+      return
+    }
     setAccMsg('Збереження акаунту...')
     try {
-      const res = await fetch('/api/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(accForm)
-      })
+      // Якщо акаунт уже створено (користувач повернувся кнопкою «Інший
+      // номер») — оновлюємо існуючий, а не плодимо дублі.
+      const isUpdate = Boolean(accCreatedId)
+      const res = await fetch(
+        isUpdate ? `/api/accounts/${accCreatedId}` : '/api/accounts',
+        {
+          method: isUpdate ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(accForm)
+        }
+      )
       const data = await res.json()
       if (res.ok) {
         setAccCreatedId(data.id)
         setAccStep('code')
-        setAccMsg('Акаунт створено. Для підключення натисніть «Запитати код»')
+        setAccMsg(isUpdate
+          ? 'Номер оновлено. Натисніть «Запитати код»'
+          : 'Акаунт створено. Для підключення натисніть «Запитати код»')
         fetchAccounts()
       } else {
-        setAccMsg(data.detail || 'Помилка створення')
+        setAccMsg(data.detail || 'Помилка збереження')
       }
     } catch (err) {
       setAccMsg('Помилка зєднання')
@@ -406,14 +418,54 @@ export default function App() {
       if (data.success) {
         fetchAccounts()
         setTimeout(() => {
-          setShowAddAccountModal(false)
-          setAccStep('config')
-          setAccMsg('')
+          closeAccountModal()
         }, 1200)
       }
     } catch (err) {
       setAccMsg('Помилка підтвердження коду')
     }
+  }
+
+  // Крок коду не має бути тупиком: якщо номер не приймає код, користувач
+  // мусить мати змогу повернутися і вказати інший, не видаляючи акаунт.
+  const handleChangePhone = async () => {
+    if (accCreatedId) {
+      // Скидаємо незавершену авторизацію на сервері, щоб зайняте
+      // зʼєднання не заважало новому номеру.
+      try {
+        await fetch(`/api/accounts/${accCreatedId}/cancel-auth`, { method: 'POST' })
+      } catch (err) {
+        console.error('Error cancelling auth:', err)
+      }
+    }
+    setAccCode('')
+    setAccPhoneCodeHash(null)
+    setAccStep('config')
+    setAccMsg('Вкажіть інший номер телефону і збережіть знову')
+  }
+
+  // Єдина точка закриття: чистить увесь стан майстра, щоб наступне
+  // відкриття не успадкувало чужий крок, код чи повідомлення.
+  const closeAccountModal = () => {
+    setShowAddAccountModal(false)
+    setAccStep('config')
+    setAccCode('')
+    setAccPhoneCodeHash(null)
+    setAccMsg('')
+    setAccCreatedId(null)
+    setAccForm({ name: '', api_id: '', api_hash: '', phone_number: '' })
+  }
+
+  // Відкриття завжди з першого кроку — інакше майстер підхоплює стан
+  // попередньої незавершеної спроби і показує вікно коду замість форми.
+  const openAccountModal = () => {
+    setAccStep('config')
+    setAccCode('')
+    setAccPhoneCodeHash(null)
+    setAccMsg('')
+    setAccCreatedId(null)
+    setAccForm({ name: '', api_id: '', api_hash: '', phone_number: '' })
+    setShowAddAccountModal(true)
   }
 
   const handleDeleteAccount = async (accId) => {
@@ -736,6 +788,9 @@ export default function App() {
         handleAddAccountSubmit={handleAddAccountSubmit}
         handleVerifyAccCode={handleVerifyAccCode}
         handleRequestAccCode={handleRequestAccCode}
+        handleChangePhone={handleChangePhone}
+        openAccountModal={openAccountModal}
+        closeAccountModal={closeAccountModal}
         handleDeleteAccount={handleDeleteAccount}
         handleAddChannelSubmit={handleAddChannelSubmit}
         handleToggleChannelEnabled={handleToggleChannelEnabled}

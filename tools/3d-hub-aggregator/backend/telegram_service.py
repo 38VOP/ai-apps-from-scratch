@@ -193,6 +193,10 @@ class MultiAccountTelegramServiceManager:
             except Exception:
                 pass
 
+    async def cancel_pending_auth(self, account_id: int):
+        """Публічна відмова від незавершеної авторизації (кнопка «Інший номер»)."""
+        await self._drop_pending(account_id)
+
     async def release_account(self, account_id: int):
         """Повністю відпускає акаунт: робоче зʼєднання і незавершену авторизацію.
         Викликається при видаленні акаунта, щоб не залишати відкритих сокетів."""

@@ -24,6 +24,9 @@ export default function SourcesPanel({
   handleAddAccountSubmit,
   handleVerifyAccCode,
   handleRequestAccCode,
+  handleChangePhone,
+  openAccountModal,
+  closeAccountModal,
   handleDeleteAccount,
   handleAddChannelSubmit,
   handleToggleChannelEnabled,
@@ -81,7 +84,7 @@ export default function SourcesPanel({
                 <ShieldCheck className="text-primary" size={22} />
                 <span>Telegram-акаунти</span>
               </div>
-              <button className="btn btn-primary" onClick={() => setShowAddAccountModal(true)}>
+              <button className="btn btn-primary" onClick={openAccountModal}>
                 <Plus size={16} />
                 <span>Додати акаунт</span>
               </button>
@@ -294,11 +297,11 @@ export default function SourcesPanel({
       </main>
 
       {showAddAccountModal && (
-        <div className="modal-overlay" onClick={() => setShowAddAccountModal(false)}>
+        <div className="modal-overlay" onClick={closeAccountModal}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">Підключити Telegram-акаунт</h2>
-              <button className="btn-close" onClick={() => setShowAddAccountModal(false)}>
+              <button className="btn-close" onClick={closeAccountModal}>
                 <X size={20} />
               </button>
             </div>
@@ -362,7 +365,7 @@ export default function SourcesPanel({
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddAccountModal(false)}>
+                  <button type="button" className="btn btn-secondary" onClick={closeAccountModal}>
                     Скасувати
                   </button>
                   <button type="submit" className="btn btn-primary">
@@ -383,17 +386,26 @@ export default function SourcesPanel({
                     autoFocus
                   />
                   <div style={{fontSize:'0.75rem',color:'var(--text-muted)',marginTop:6}}>
-                    Код дійсний 120 секунд. Якщо не прийшов — натисніть "Запитати код" знову.
+                    Код дійсний ~120 секунд. Якщо не прийшов — натисніть «Запитати код» знову.
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, gap: 12 }}>
                   <button type="button" className="btn btn-secondary" onClick={() => handleRequestAccCode(accCreatedId)}>
                     Запитати код
                   </button>
-                  <button type="submit" className="btn btn-primary">
-                    Підтвердити та увійти
-                  </button>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <button type="button" className="btn btn-secondary" onClick={handleChangePhone}>
+                      Інший номер
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                      Підтвердити та увійти
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{fontSize:'0.75rem',color:'var(--text-muted)',marginTop:12,textAlign:'center'}}>
+                  Номер не приймає код? «Інший номер» повертає до налаштувань — акаунт залишається.
                 </div>
               </form>
             )}
