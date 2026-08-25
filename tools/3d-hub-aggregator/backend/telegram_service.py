@@ -504,7 +504,7 @@ class MultiAccountTelegramServiceManager:
                 channel.status = "error"
                 channel.status_message = "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований"
                 db.commit()
-        return {"success": False, "message": "Акаунт не авторизований, синхронізація неможлива"}
+                return {"success": False, "message": "Акаунт не авторизований, синхронізація неможлива"}
         mode = "backlog" if not channel.initial_scan_completed else "monitoring"
         task = ParseTask(channel_id=channel_id, account_id=account_id, mode=mode)
         self.parse_queue.append(task)
