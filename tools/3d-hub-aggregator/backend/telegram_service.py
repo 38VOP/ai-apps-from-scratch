@@ -4,7 +4,7 @@ import json
 import logging
 import random
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from collections import deque
 
@@ -42,9 +42,22 @@ class MultiAccountTelegramServiceManager:
         self.active_tasks: Dict[int, ParseTask] = {}
         self.account_last_used: Dict[int, datetime] = {}
         self.is_processing_queue = False
-        self.min_delay = 2.0
+
+        # --- Анти-бан таймінги (ANCHOR.md р.54, р.60) ---------------------
+        # Непомітність важливіша за швидкість. Основний ризик — backlog-скан
+        # (первинний повний прохід історії), тому там паузи довгі; monitoring
+        # добирає лише нові пости, йому достатньо коротких.
+        self.min_delay = 2.0          # monitoring: пауза між пачками, с
         self.max_delay = 5.0
-        self.flood_cooldown = 300
+        self.backlog_batch_size = 12  # постів у пачці під час backlog
+        self.backlog_min_delay = 25.0  # backlog: пауза між пачками, с
+        self.backlog_max_delay = 70.0
+        self.long_pause_every = 8     # раз на стільки пачок — «перекур»
+        self.long_pause_min = 180.0   # тривалість «перекуру», с
+        self.long_pause_max = 360.0
+        self.channel_gap_min = 120.0  # пауза між каналами в черзі, с
+        self.channel_gap_max = 300.0
+        self.flood_extra_cooldown = 600  # запас після FloodWait, с
 
     async def get_client_for_account(self, db: Session, account_id: int) -> Optional[Any]:
         if not TELETHON_AVAILABLE:
@@ -68,15 +81,27 @@ class MultiAccountTelegramServiceManager:
         accounts = db.query(TelegramAccount).filter(TelegramAccount.is_authorized == True).all()
         if not accounts:
             return None
+        now = datetime.utcnow()
         best_account = None
         earliest_usage = None
         for acc in accounts:
             last_used = self.account_last_used.get(acc.id)
             if last_used is None:
                 return acc.id
+            # Час у майбутньому = акаунт під витримкою після FloodWait.
+            # Такий не беремо взагалі, інакше запас нічого не дає.
+            if last_used > now:
+                continue
             if earliest_usage is None or last_used < earliest_usage:
                 earliest_usage = last_used
                 best_account = acc.id
+        if best_account is None:
+            held = [
+                f"{aid} до {t.isoformat(timespec='seconds')}"
+                for aid, t in self.account_last_used.items() if t > now
+            ]
+            if held:
+                logger.warning(f"All accounts on cooldown: {', '.join(held)}")
         return best_account
 
     def _get_random_delay(self) -> float:
@@ -103,8 +128,17 @@ class MultiAccountTelegramServiceManager:
                     logger.error(f"Error processing task for channel {task.channel_id}: {e}")
                 finally:
                     self.active_tasks.pop(task.channel_id, None)
-                    self.account_last_used[task.account_id] = datetime.utcnow()
-                await asyncio.sleep(self._get_random_delay())
+                    # Не збиваємо витримку, яку виставив FloodWait: там час
+                    # у майбутньому, і перезапис на utcnow() зняв би запас.
+                    prev = self.account_last_used.get(task.account_id)
+                    now = datetime.utcnow()
+                    if prev is None or prev < now:
+                        self.account_last_used[task.account_id] = now
+                # Пауза між каналами: людина не переходить до наступного
+                # джерела за секунди.
+                gap = random.uniform(self.channel_gap_min, self.channel_gap_max)
+                logger.info(f"Queue: waiting {gap:.0f}s before the next channel")
+                await asyncio.sleep(gap)
         finally:
             self.is_processing_queue = False
 
@@ -321,17 +355,17 @@ class MultiAccountTelegramServiceManager:
 
         account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first() if account_id else None
         if not account or not account.is_authorized:
-                    best_id = self._get_best_account(db)
-                    if best_id:
-                        account_id = best_id
-                        channel.account_id = best_id
-                        db.commit()
-                    else:
-                        channel.status = "error"
-                        channel.scan_mode = "idle"
-                        channel.status_message = "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований"
-                        db.commit()
-                        return {"success": False, "message": "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований", "added_count": 0}
+            best_id = self._get_best_account(db)
+            if best_id:
+                account_id = best_id
+                channel.account_id = best_id
+                db.commit()
+            else:
+                channel.status = "error"
+                channel.scan_mode = "idle"
+                channel.status_message = "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований"
+                db.commit()
+                return {"success": False, "message": "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований", "added_count": 0}
 
         client = await self.get_client_for_account(db, account_id) if account_id else None
         if not client or not await client.is_user_authorized():
@@ -355,6 +389,17 @@ class MultiAccountTelegramServiceManager:
         new_items_count = 0
         highest_msg_id = channel.last_scanned_id or 0
         batch_counter = 0
+        batches_done = 0
+
+        # Backlog проходить усю історію каналу — саме він виглядає підозріло,
+        # тому дрібніші пачки й довгі паузи. Monitoring добирає кілька нових
+        # постів, йому вистачає коротких (ANCHOR.md р.54).
+        if is_initial_scan:
+            batch_size = self.backlog_batch_size
+            batch_min, batch_max = self.backlog_min_delay, self.backlog_max_delay
+        else:
+            batch_size = 20
+            batch_min, batch_max = self.min_delay, self.max_delay
 
         try:
             entity = await client.get_entity(channel.username or channel.telegram_id)
@@ -428,13 +473,32 @@ class MultiAccountTelegramServiceManager:
                 db.add(model)
                 new_items_count += 1
                 batch_counter += 1
-                if batch_counter >= 20:
+                if batch_counter >= batch_size:
                     if highest_msg_id > 0:
                         channel.last_scanned_id = highest_msg_id
                     channel.processed_count = db.query(ModelItem).filter(ModelItem.channel_id == channel.id).count()
                     db.commit()
                     batch_counter = 0
-                    await asyncio.sleep(self._get_random_delay())
+                    batches_done += 1
+
+                    # Раз на N пачок — довга пауза-«перекур». Рівний темп
+                    # годинами виглядає як бот, навіть із випадковими паузами.
+                    if is_initial_scan and batches_done % self.long_pause_every == 0:
+                        pause = random.uniform(self.long_pause_min, self.long_pause_max)
+                        channel.status_message = (
+                            f"Пауза {int(pause // 60)} хв — анти-бан "
+                            f"(зібрано {new_items_count})"
+                        )
+                        db.commit()
+                        logger.info(
+                            f"Channel {channel.id}: long pause {pause:.0f}s "
+                            f"after {batches_done} batches"
+                        )
+                        await asyncio.sleep(pause)
+                        channel.status_message = "Первинне сканування історії каналу..."
+                        db.commit()
+                    else:
+                        await asyncio.sleep(random.uniform(batch_min, batch_max))
 
             channel.initial_scan_completed = True
             channel.status = "up_to_date"
@@ -458,10 +522,23 @@ class MultiAccountTelegramServiceManager:
                 channel.processed_count = db.query(ModelItem).filter(ModelItem.channel_id == channel.id).count()
             channel.status = "error"
             channel.scan_mode = "idle"
-            channel.status_message = "Telegram обмежив запити → зачекайте ~{wait_minutes} хв., продовжиться само"
+            channel.status_message = f"Telegram обмежив запити → зачекайте ~{wait_minutes} хв., продовжиться само"
             channel.last_synced_at = datetime.utcnow()
             db.commit()
             await self._save_session(client, db, account_id)
+            # Витримка з запасом: позначаємо акаунт використаним у МАЙБУТНЬОМУ,
+            # тому _get_best_account природно оминатиме його, поки час не мине.
+            # Запас понад вимогу Telegram — щоб не впертися в межу знову.
+            if account_id:
+                self.account_last_used[account_id] = (
+                    datetime.utcnow()
+                    + timedelta(seconds=wait_seconds + self.flood_extra_cooldown)
+                )
+                logger.warning(
+                    f"Account {account_id}: FloodWait {wait_seconds}s "
+                    f"+{self.flood_extra_cooldown}s buffer — held until "
+                    f"{self.account_last_used[account_id].isoformat(timespec='seconds')}"
+                )
             return {"success": False, "message": f"Telegram обмежив запити. Прогрес збережено ({new_items_count} моделей). Зачекайте ~{wait_minutes} хв.", "added_count": new_items_count}
 
         except (UserDeactivatedBanError, AuthKeyUnregisteredError) as auth_err:
