@@ -763,6 +763,7 @@ export default function App() {
         setAccStep={setAccStep}
         accCode={accCode}
         setAccCode={setAccCode}
+        accCreatedId={accCreatedId}
         accMsg={accMsg}
         setAccMsg={setAccMsg}
         chForm={chForm}
