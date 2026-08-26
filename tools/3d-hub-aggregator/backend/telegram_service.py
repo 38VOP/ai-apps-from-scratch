@@ -580,6 +580,7 @@ class MultiAccountTelegramServiceManager:
             if account_id:
                 channel.account_id = account_id
                 db.commit()
+                account = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
             else:
                 channel.status = "error"
                 channel.status_message = "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований"
