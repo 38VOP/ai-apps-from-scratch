@@ -100,8 +100,8 @@ export default function SourcesPanel({
                     <div key={acc.id} className="account-card">
                       <div className="account-header">
                         <span className="account-name">{acc.name}</span>
-                        <span className={`status-pill ${sess === 'valid' ? 'active' : 'idle'}`}>
-                          {sess === 'valid' ? '🟢 З\'єднано' : '⚪ Не авторизовано'}
+                        <span className={`status-pill ${acc.is_authorized ? 'active' : 'idle'}`}>
+                          {acc.is_authorized ? '🟢 З\'єднано' : '⚪ Не авторизовано'}
                         </span>
                       </div>
 

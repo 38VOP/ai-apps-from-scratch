@@ -582,6 +582,16 @@ class MultiAccountTelegramServiceManager:
                 channel.status_message = "Увійдіть у Telegram у розділі Джерела — акаунт не авторизований"
                 db.commit()
                 return {"success": False, "message": "Акаунт не авторизований, синхронізація неможлива"}
+
+        # Реальна перевірка сесії: поле в БД is_authorized може бути 1,
+        # але сесія вже мертва. Інакше Telethon підключиться й відразу
+        # впаде з AuthKeyUnregistered під час парсингу.
+        client = await self.get_client_for_account(db, account_id)
+        if not client or not await client.is_user_authorized():
+            channel.status = "error"
+            channel.status_message = "Сесія застаріла → переавторизуйте акаунт у розділі Джерела"
+            db.commit()
+            return {"success": False, "message": "Сесія застаріла. Переавторизуйте акаунт у розділі Джерела."}
         mode = "backlog" if not channel.initial_scan_completed else "monitoring"
         task = ParseTask(channel_id=channel_id, account_id=account_id, mode=mode)
         self.parse_queue.append(task)
