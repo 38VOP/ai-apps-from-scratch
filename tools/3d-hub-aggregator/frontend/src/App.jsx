@@ -311,6 +311,7 @@ export default function App() {
       const data = await res.json()
       setGlobalSyncMsg(data.message)
       fetchChannels()
+      fetchAccounts()
       fetchModels()
       fetchUserCategories()
     } catch (err) {

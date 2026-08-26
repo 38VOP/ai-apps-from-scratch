@@ -67,14 +67,16 @@ class MultiAccountTelegramServiceManager:
             return None
         if account_id in self.clients and self.clients[account_id].is_connected():
             return self.clients[account_id]
-        session = StringSession(account.session_string or "")
         try:
+            session = StringSession(account.session_string or "")
             client = TelegramClient(session, int(account.api_id), account.api_hash)
             await client.connect()
             self.clients[account_id] = client
             return client
         except Exception as e:
             logger.error(f"Telegram client connection error for account {account_id}: {e}")
+            # Сесія невалідна — прибираємо кеш, щоб наступний виклик теж не падав
+            self.clients.pop(account_id, None)
             return None
 
     def _get_best_account(self, db: Session) -> Optional[int]:
@@ -545,6 +547,7 @@ class MultiAccountTelegramServiceManager:
             channel.status = "error"
             channel.scan_mode = "idle"
             channel.status_message = "Сесія застаріла → переавторизуйте акаунт у розділі Джерела"
+            account.is_authorized = False
             db.commit()
             return {"success": False, "message": "Сесія Telegram більше не дійсна. Переавторизуйте акаунт."}
 
@@ -590,6 +593,7 @@ class MultiAccountTelegramServiceManager:
         if not client or not await client.is_user_authorized():
             channel.status = "error"
             channel.status_message = "Сесія застаріла → переавторизуйте акаунт у розділі Джерела"
+            account.is_authorized = False
             db.commit()
             return {"success": False, "message": "Сесія застаріла. Переавторизуйте акаунт у розділі Джерела."}
         mode = "backlog" if not channel.initial_scan_completed else "monitoring"
