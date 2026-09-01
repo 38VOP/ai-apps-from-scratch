@@ -19,6 +19,7 @@ class AccountCreate(BaseModel):
 
 class AccountCodeRequest(BaseModel):
     code: str
+    phone_code_hash: Optional[str] = None
 
 
 class ChannelCreate(BaseModel):
@@ -80,13 +81,98 @@ async def request_account_code(account_id: int, db: Session = Depends(get_db)):
 
 @router.post("/api/accounts/{account_id}/sign-in")
 async def sign_in_account(account_id: int, body: AccountCodeRequest, db: Session = Depends(get_db)):
-    res = await telegram_manager.sign_in(db, account_id, body.code)
+    res = await telegram_manager.sign_in(db, account_id, body.code, body.phone_code_hash)
     return res
 
 
-@router.delete("/api/accounts/{account_id}")
-def delete_telegram_account(account_id: int, db: Session = Depends(get_db)):
+@router.get("/api/accounts/{account_id}/session-status")
+async def check_session_status(account_id: int, db: Session = Depends(get_db)):
+    """Повертає стан сесії: valid (працює), expired (застаріла), none (відсутня)."""
     acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
+    if not acc.session_string:
+        return {"status": "none", "message": "Сесія відсутня"}
+    try:
+        client = await telegram_manager.get_client_for_account(db, account_id)
+        if client and await client.is_user_authorized():
+            return {"status": "valid", "message": "Сесія активна"}
+        return {"status": "expired", "message": "Сесія застаріла"}
+    except Exception:
+        return {"status": "expired", "message": "Сесія застаріла"}
+
+
+@router.patch("/api/accounts/{account_id}")
+async def update_telegram_account(account_id: int, body: AccountCreate, db: Session = Depends(get_db)):
+    """Оновлює дані акаунта до успішної авторизації.
+
+    Потрібне для сценарію «номер не приймає код → вказати інший»: акаунт уже
+    створено, тому повторне збереження форми мусить правити існуючий запис,
+    а не плодити дублі.
+    """
+    acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
+
+    new_phone = body.phone_number.strip()
+    if not new_phone:
+        raise HTTPException(status_code=400, detail="Вкажіть номер телефону")
+
+    # Зміна номера робить попередню сесію і незавершену авторизацію
+    # безглуздими — вони належали іншому номеру.
+    if new_phone != (acc.phone_number or ""):
+        await telegram_manager.release_account(account_id)
+        acc.session_string = None
+        acc.is_authorized = False
+
+    if body.name.strip():
+        acc.name = body.name.strip()
+    acc.api_id = body.api_id.strip()
+    acc.api_hash = body.api_hash.strip()
+    acc.phone_number = new_phone
+    db.commit()
+    db.refresh(acc)
+    return {"id": acc.id, "name": acc.name, "message": "Дані акаунта оновлено"}
+
+
+@router.post("/api/accounts/{account_id}/cancel-auth")
+async def cancel_account_auth(account_id: int, db: Session = Depends(get_db)):
+    """Скидає незавершену спробу авторизації.
+
+    Без цього зайняте зʼєднання Telethon тримає phone_code_hash старого
+    номера і мовчки заважає почати заново з іншим.
+    """
+    acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
+    await telegram_manager.cancel_pending_auth(account_id)
+    return {"success": True, "message": "Спробу авторизації скасовано"}
+
+
+@router.delete("/api/accounts/{account_id}")
+async def delete_telegram_account(account_id: int, db: Session = Depends(get_db)):
+    acc = db.query(TelegramAccount).filter(TelegramAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
+
+    # Канали переживають свій акаунт: моделі та історія сканування належать
+    # каналу, не акаунту. Відвʼязуємо, щоб їх можна було перепризначити.
+    detached = db.query(Channel).filter(Channel.account_id == account_id).update(
+        {Channel.account_id: None}, synchronize_session=False
+    )
+
+    # Закриваємо зʼєднання: і робоче, і незавершену спробу авторизації —
+    # інакше сокети Telethon залишаються відкритими до перезапуску процесу.
+    await telegram_manager.release_account(account_id)
+
+    name = acc.name
+    db.delete(acc)
+    db.commit()
+    return {
+        "success": True,
+        "message": f"Акаунт «{name}» видалено",
+        "detached_channels": detached
+    }
 
 
 @router.get("/api/channels")
@@ -176,9 +262,3 @@ def delete_channel(channel_id: int, db: Session = Depends(get_db)):
 async def sync_channel(channel_id: int, db: Session = Depends(get_db)):
     res = await telegram_manager.queue_channel(db, channel_id)
     return res
-
-    if not acc:
-        raise HTTPException(status_code=404, detail="Акаунт не знайдено")
-    db.delete(acc)
-    db.commit()
-    return {"success": True, "message": "Акаунт видалено"}

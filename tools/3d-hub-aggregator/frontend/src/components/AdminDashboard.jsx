@@ -1,15 +1,19 @@
 import React from 'react'
-import { BarChart3, Layers, RadioTower, FolderOpen, ShoppingCart, Clock, RefreshCw } from 'lucide-react'
+import { BarChart3, Layers, RadioTower, FolderOpen, ShoppingCart, Clock, RefreshCw, ArrowLeft } from 'lucide-react'
 
 export default function AdminDashboard({
   adminStats,
   fetchAdminStats,
-  getStatusLabel
+  getStatusLabel,
+  setActiveTab
 }) {
   if (!adminStats) return null
 
   return (
     <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+      <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Назад до каталогу">
+        <ArrowLeft size={16} />
+      </button>
       <div className="sources-container">
         <div className="section-header">
           <div className="section-title">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FolderOpen, Plus, Trash2, Edit2, Check, X, Layers, ExternalLink } from 'lucide-react'
+import { FolderOpen, Plus, Trash2, Edit2, Check, X, Layers, ExternalLink, ArrowLeft } from 'lucide-react'
 
 export default function Projects({
   activeTab,
@@ -50,7 +50,11 @@ export default function Projects({
 
   return (
     <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+      <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Назад до каталогу">
+        <ArrowLeft size={16} />
+      </button>
       <div className="sources-container">
+        {!selectedProject && (
         <div className="sources-section">
           <div className="section-header">
             <div className="section-title">
@@ -122,6 +126,7 @@ export default function Projects({
             </div>
           )}
         </div>
+        )}
 
         {selectedProject && (
           <div className="sources-section">
@@ -130,6 +135,9 @@ export default function Projects({
                 <Layers className="text-cyan" size={22} />
                 <span>{selectedProject.name}</span>
               </div>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setSelectedProject(null); }}>
+                <X size={14} /><span>Усі проекти</span>
+              </button>
             </div>
 
             {projectModels.length === 0 ? (

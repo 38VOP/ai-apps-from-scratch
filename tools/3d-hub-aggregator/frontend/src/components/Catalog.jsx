@@ -6,7 +6,11 @@ export default function Catalog({
   loadingModels, selectedModel, currentPage, totalPages, catsExpanded,
   setCatsExpanded, setShowCatManagerModal, fetchUserCategories,
   setSelectedCategory, setSearchQuery, setCurrentPage, setSelectedModel,
-  handleAddToCart, handleUpdateModelCategory, handleDeleteModel, handleRefreshPreview
+  handleAddToCart, handleUpdateModelCategory, handleDeleteModel, handleRefreshPreview,
+  projects = [], projectsExpanded, setProjectsExpanded, setActiveTab, fetchProjectDetail,
+  settingsExpanded, setSettingsExpanded,
+  fetchAccounts, fetchChannels, fetchAdminStats,
+  pageSize, setPageSize
 }) {
   if (activeTab !== 'catalog') return null
 
@@ -21,21 +25,55 @@ export default function Catalog({
                 <span className="collapse-icon">{catsExpanded ? '−' : '+'}</span>
               </div>
               {catsExpanded && (
-                <>
-                  <ul className="nav-list">
-                    <li className={"nav-item " + (selectedCategory === null ? 'active' : '')} onClick={() => { setSelectedCategory(null); setCurrentPage(1); }}>
-                      <span>Усі категорії</span><span className="badge-count">{totalModels}</span>
+                <ul className="nav-list">
+                  <li className={"nav-item " + (selectedCategory === null ? 'active' : '')} onClick={() => { setSelectedCategory(null); setCurrentPage(1); }}>
+                    <span>Усі категорії</span><span className="badge-count">{totalModels}</span>
+                  </li>
+                  {categories.filter(c => c.is_visible).map(cat => (
+                    <li key={cat.id} className={"nav-item " + (selectedCategory === cat.id ? 'active' : '')} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}>
+                      <span>{cat.name}</span><span className="badge-count">{cat.count}</span>
                     </li>
-                    {categories.filter(c => c.is_visible).map(cat => (
-                      <li key={cat.id} className={"nav-item " + (selectedCategory === cat.id ? 'active' : '')} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }}>
-                        <span>{cat.name}</span><span className="badge-count">{cat.count}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button className="btn btn-secondary btn-sm" style={{ width: '100%', marginTop: 12, justifyContent: 'center' }} onClick={() => { fetchUserCategories(true); setShowCatManagerModal(true); }}>
-                    <Settings size={14} /><span>Налаштувати</span>
-                  </button>
-                </>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="sidebar-section">
+              <div className="sidebar-section-header" onClick={() => setProjectsExpanded(!projectsExpanded)}>
+                <div className="sidebar-title" style={{ marginBottom: 0 }}>Проекти</div>
+                <span className="collapse-icon">{projectsExpanded ? '−' : '+'}</span>
+              </div>
+              {projectsExpanded && (
+                <ul className="nav-list">
+                  <li className="nav-item" onClick={() => setActiveTab('projects')}>
+                    <span>Усі проекти</span><span className="badge-count">{projects.length}</span>
+                  </li>
+                  {projects.map(proj => (
+                    <li key={proj.id} className="nav-item" onClick={() => { fetchProjectDetail(proj.id); setActiveTab('projects'); }}>
+                      <span>{proj.name}</span><span className="badge-count">{proj.item_count}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="sidebar-section">
+              <div className="sidebar-section-header" onClick={() => setSettingsExpanded(!settingsExpanded)}>
+                <div className="sidebar-title" style={{ marginBottom: 0 }}>Налаштування</div>
+                <span className="collapse-icon">{settingsExpanded ? '−' : '+'}</span>
+              </div>
+              {settingsExpanded && (
+                <ul className="nav-list">
+                  <li className="nav-item" onClick={() => { fetchUserCategories(true); setShowCatManagerModal(true); }}>
+                    <span>Категорії</span>
+                  </li>
+                  <li className="nav-item" onClick={() => { setActiveTab('sources'); fetchAccounts(); fetchChannels(); }}>
+                    <span>Джерела</span>
+                  </li>
+                  <li className="nav-item" onClick={() => { setActiveTab('admin'); fetchAdminStats(); }}>
+                    <span>Статистика</span>
+                  </li>
+                </ul>
               )}
             </div>
           </div>
@@ -76,9 +114,37 @@ export default function Catalog({
               </div>
               {totalPages > 1 && (
                 <div className="pagination">
+                  <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(1)}>«</button>
                   <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Попередня</button>
-                  <span className="page-info">Сторінка {currentPage} з {totalPages}</span>
+                  {(() => {
+                    // Вікно з 5 номерів навколо поточної сторінки, притиснуте до меж діапазону.
+                    const win = 5
+                    let from = Math.max(1, currentPage - Math.floor(win / 2))
+                    const to = Math.min(totalPages, from + win - 1)
+                    from = Math.max(1, to - win + 1)
+                    const pages = []
+                    for (let p = from; p <= to; p++) pages.push(p)
+                    return pages.map(p => (
+                      <button
+                        key={p}
+                        className={"btn btn-sm " + (p === currentPage ? 'btn-primary' : 'btn-secondary')}
+                        onClick={() => setCurrentPage(p)}
+                      >
+                        {p}
+                      </button>
+                    ))
+                  })()}
                   <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Наступна</button>
+                  <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}>»</button>
+                  <span className="page-info">{currentPage} з {totalPages}</span>
+                  <select
+                    className="form-select"
+                    style={{ width: 'auto', padding: '6px 10px', fontSize: '0.82rem' }}
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                  >
+                    {[12, 24, 48, 96].map(n => <option key={n} value={n}>{n} на стор.</option>)}
+                  </select>
                 </div>
               )}
             </>

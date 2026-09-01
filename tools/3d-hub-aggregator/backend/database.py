@@ -3,7 +3,7 @@ import json
 import sqlite3
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text, event
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -17,6 +17,18 @@ SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
+
+
+# SQLite ігнорує FOREIGN KEY, поки їх не увімкнути на КОЖНОМУ зʼєднанні.
+# Без цього БД не заперечує проти записів, що вказують у нікуди, і цілісність
+# тримається лише на дисципліні прикладного коду — тобто не тримається.
+@event.listens_for(engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -99,15 +111,20 @@ class ModelItem(Base):
     category = relationship("Category", back_populates="models")
     channel = relationship("Channel", back_populates="models")
 
+    # Видалення моделі мусить прибирати її з кошика і з усіх проектів.
+    # Без цих каскадів залишаються записи, що вказують на неіснуючу модель.
+    cart_entries = relationship("CartItem", back_populates="model", cascade="all, delete-orphan")
+    project_entries = relationship("ProjectItem", back_populates="model", cascade="all, delete-orphan")
+
 
 class CartItem(Base):
     __tablename__ = "cart_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
+    model_id = Column(Integer, ForeignKey("models.id", ondelete="CASCADE"), nullable=False, unique=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    model = relationship("ModelItem")
+    model = relationship("ModelItem", back_populates="cart_entries")
 
 
 class Project(Base):
@@ -124,12 +141,12 @@ class ProjectItem(Base):
     __tablename__ = "project_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    model_id = Column(Integer, ForeignKey("models.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    model_id = Column(Integer, ForeignKey("models.id", ondelete="CASCADE"), nullable=False)
     added_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="items")
-    model = relationship("ModelItem")
+    model = relationship("ModelItem", back_populates="project_entries")
 
 
 class TelegramConfig(Base):
@@ -218,6 +235,17 @@ def migrate_sqlite_columns():
             )
         """)
 
+    # QA-001: enforce one cart row per model. Existing installs have no UNIQUE
+    # constraint, so parallel POSTs could both pass the "already in cart" check
+    # and insert duplicates. Dedupe leftovers first, then add the unique index.
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='ux_cart_items_model_id'")
+    if not cursor.fetchone():
+        cursor.execute("""
+            DELETE FROM cart_items
+            WHERE id NOT IN (SELECT MIN(id) FROM cart_items GROUP BY model_id)
+        """)
+        cursor.execute("CREATE UNIQUE INDEX ux_cart_items_model_id ON cart_items(model_id)")
+
     # Create projects table if not exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")
     if not cursor.fetchone():
@@ -238,10 +266,66 @@ def migrate_sqlite_columns():
                 project_id INTEGER NOT NULL,
                 model_id INTEGER NOT NULL,
                 added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (project_id) REFERENCES projects(id),
-                FOREIGN KEY (model_id) REFERENCES models(id)
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE
             )
         """)
+
+    # --- Rebuild FKs to add ON DELETE CASCADE -------------------------------
+    # SQLite cannot ALTER a constraint: the table has to be recreated. Older
+    # installs have cart_items / project_items without CASCADE, which leaves
+    # rows pointing at deleted models. Detect by inspecting the stored DDL.
+    def _needs_cascade(table):
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,))
+        row = cursor.fetchone()
+        return bool(row) and "ON DELETE CASCADE" not in (row[0] or "")
+
+    cursor.execute("PRAGMA foreign_keys=OFF")
+
+    if _needs_cascade("cart_items"):
+        cursor.execute("""
+            CREATE TABLE cart_items_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                model_id INTEGER NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE
+            )
+        """)
+        # Only carry over rows whose model still exists.
+        cursor.execute("""
+            INSERT INTO cart_items_new (id, model_id, created_at)
+            SELECT id, model_id, created_at FROM cart_items
+            WHERE model_id IN (SELECT id FROM models)
+        """)
+        cursor.execute("DROP TABLE cart_items")
+        cursor.execute("ALTER TABLE cart_items_new RENAME TO cart_items")
+
+    if _needs_cascade("project_items"):
+        cursor.execute("""
+            CREATE TABLE project_items_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                model_id INTEGER NOT NULL,
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO project_items_new (id, project_id, model_id, added_at)
+            SELECT id, project_id, model_id, added_at FROM project_items
+            WHERE model_id IN (SELECT id FROM models)
+              AND project_id IN (SELECT id FROM projects)
+        """)
+        cursor.execute("DROP TABLE project_items")
+        cursor.execute("ALTER TABLE project_items_new RENAME TO project_items")
+
+    # Clean up any orphans left by pre-CASCADE deletions.
+    cursor.execute("DELETE FROM cart_items WHERE model_id NOT IN (SELECT id FROM models)")
+    cursor.execute("DELETE FROM project_items WHERE model_id NOT IN (SELECT id FROM models)")
+    cursor.execute("UPDATE channels SET account_id = NULL WHERE account_id IS NOT NULL AND account_id NOT IN (SELECT id FROM telegram_accounts)")
+
+    cursor.execute("PRAGMA foreign_keys=ON")
 
     conn.commit()
     conn.close()

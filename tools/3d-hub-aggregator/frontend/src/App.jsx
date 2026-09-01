@@ -26,6 +26,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [pageSize, setPageSize] = useState(24)
 
   // Sources State
   const [accounts, setAccounts] = useState([])
@@ -62,6 +63,7 @@ export default function App() {
   const [accStep, setAccStep] = useState('config')
   const [accCreatedId, setAccCreatedId] = useState(null)
   const [accCode, setAccCode] = useState('')
+  const [accPhoneCodeHash, setAccPhoneCodeHash] = useState(null)
   const [accMsg, setAccMsg] = useState('')
 
   // Channel Form
@@ -74,6 +76,7 @@ export default function App() {
   // Collapsible sidebar sections
   const [catsExpanded, setCatsExpanded] = useState(true)
   const [projectsExpanded, setProjectsExpanded] = useState(true)
+  const [settingsExpanded, setSettingsExpanded] = useState(true)
 
   useEffect(() => {
     fetchUserCategories()
@@ -89,7 +92,7 @@ export default function App() {
     } else if (activeTab === 'admin') {
       fetchAdminStats()
     }
-  }, [activeTab, selectedCategory, searchQuery, currentPage])
+  }, [activeTab, selectedCategory, searchQuery, currentPage, pageSize])
 
   // --- API CALLS ---
 
@@ -100,7 +103,7 @@ export default function App() {
       if (searchQuery) params.append('search', searchQuery)
       if (selectedCategory) params.append('category_id', selectedCategory)
       params.append('page', currentPage)
-      params.append('limit', '24')
+      params.append('limit', String(pageSize))
 
       const res = await fetch(`/api/models?${params.toString()}`)
       const data = await res.json()
@@ -308,6 +311,7 @@ export default function App() {
       const data = await res.json()
       setGlobalSyncMsg(data.message)
       fetchChannels()
+      fetchAccounts()
       fetchModels()
       fetchUserCategories()
     } catch (err) {
@@ -356,33 +360,45 @@ export default function App() {
 
   const handleAddAccountSubmit = async (e) => {
     e.preventDefault()
+    if (!accForm.phone_number.trim()) {
+      setAccMsg('Вкажіть номер телефону')
+      return
+    }
     setAccMsg('Збереження акаунту...')
     try {
-      const res = await fetch('/api/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(accForm)
-      })
+      // Якщо акаунт уже створено (користувач повернувся кнопкою «Інший
+      // номер») — оновлюємо існуючий, а не плодимо дублі.
+      const isUpdate = Boolean(accCreatedId)
+      const res = await fetch(
+        isUpdate ? `/api/accounts/${accCreatedId}` : '/api/accounts',
+        {
+          method: isUpdate ? 'PATCH' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(accForm)
+        }
+      )
       const data = await res.json()
       if (res.ok) {
         setAccCreatedId(data.id)
         setAccStep('code')
-        setAccMsg('Акаунт створено. Для підключення натисніть «Запитати код»')
+        setAccMsg(isUpdate
+          ? 'Номер оновлено. Натисніть «Запитати код»'
+          : 'Акаунт створено. Для підключення натисніть «Запитати код»')
         fetchAccounts()
       } else {
-        setAccMsg(data.detail || 'Помилка створення')
+        setAccMsg(data.detail || 'Помилка збереження')
       }
     } catch (err) {
       setAccMsg('Помилка зєднання')
     }
   }
 
-  const handleRequestAccCode = async () => {
-    if (!accCreatedId) return
+  const handleRequestAccCode = async (account_id) => {
     setAccMsg('Надсилання коду у Telegram...')
     try {
-      const res = await fetch(`/api/accounts/${accCreatedId}/request-code`, { method: 'POST' })
+      const res = await fetch(`/api/accounts/${account_id}/request-code`, { method: 'POST' })
       const data = await res.json()
+      if (data.phone_code_hash) setAccPhoneCodeHash(data.phone_code_hash)
       setAccMsg(data.message)
     } catch (err) {
       setAccMsg('Помилка надсилання коду')
@@ -396,21 +412,43 @@ export default function App() {
       const res = await fetch(`/api/accounts/${accCreatedId}/sign-in`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: accCode })
+        body: JSON.stringify({ code: accCode, phone_code_hash: accPhoneCodeHash })
       })
       const data = await res.json()
       setAccMsg(data.message)
       if (data.success) {
         fetchAccounts()
         setTimeout(() => {
-          setShowAddAccountModal(false)
-          setAccStep('config')
-          setAccMsg('')
+          closeAccountModal()
         }, 1200)
       }
     } catch (err) {
       setAccMsg('Помилка підтвердження коду')
     }
+  }
+
+  // Єдина точка закриття: чистить увесь стан майстра, щоб наступне
+  // відкриття не успадкувало чужий крок, код чи повідомлення.
+  const closeAccountModal = () => {
+    setShowAddAccountModal(false)
+    setAccStep('config')
+    setAccCode('')
+    setAccPhoneCodeHash(null)
+    setAccMsg('')
+    setAccCreatedId(null)
+    setAccForm({ name: '', api_id: '', api_hash: '', phone_number: '' })
+  }
+
+  // Відкриття завжди з першого кроку — інакше майстер підхоплює стан
+  // попередньої незавершеної спроби і показує вікно коду замість форми.
+  const openAccountModal = () => {
+    setAccStep('config')
+    setAccCode('')
+    setAccPhoneCodeHash(null)
+    setAccMsg('')
+    setAccCreatedId(null)
+    setAccForm({ name: '', api_id: '', api_hash: '', phone_number: '' })
+    setShowAddAccountModal(true)
   }
 
   const handleDeleteAccount = async (accId) => {
@@ -621,39 +659,26 @@ export default function App() {
           </div>
         </div>
 
-        {/* TABS NAVIGATION */}
-        <div className="nav-tabs">
-          <button 
-            className={`tab-btn ${activeTab === 'catalog' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('catalog'); setCurrentPage(1); fetchUserCategories(); }}
-          >
-            <Box size={18} />
-            <span>Каталог</span>
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'sources' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('sources'); fetchAccounts(); fetchChannels(); }}
-          >
-            <RadioTower size={18} />
-            <span>Джерела</span>
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('admin'); fetchAdminStats(); }}
-          >
-            <BarChart3 size={18} />
-            <span>Статистика</span>
-          </button>
-        </div>
-
         {/* CART & SEARCH */}
         <div className="header-right">
+          {activeTab === 'catalog' && (
+            <div className="search-box">
+              <Search className="search-icon" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Пошук моделей..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+              />
+            </div>
+          )}
           <button 
             className="cart-btn"
             onClick={() => setShowCartModal(true)}
           >
             <ShoppingCart size={20} />
-            {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
+            <span className="cart-badge">{cartCount}</span>
           </button>
         </div>
       </header>
@@ -692,6 +717,18 @@ export default function App() {
         handleUpdateModelCategory={handleUpdateModelCategory}
         handleDeleteModel={handleDeleteModel}
         handleRefreshPreview={handleRefreshPreview}
+        projects={projects}
+        projectsExpanded={projectsExpanded}
+        setProjectsExpanded={setProjectsExpanded}
+        setActiveTab={setActiveTab}
+        fetchProjectDetail={fetchProjectDetail}
+        settingsExpanded={settingsExpanded}
+        setSettingsExpanded={setSettingsExpanded}
+        fetchAccounts={fetchAccounts}
+        fetchChannels={fetchChannels}
+        fetchAdminStats={fetchAdminStats}
+        pageSize={pageSize}
+        setPageSize={setPageSize}
       />
 
       <Projects
@@ -713,6 +750,7 @@ export default function App() {
 
       <SourcesPanel
         activeTab={activeTab}
+        setActiveTab={setActiveTab}
         accounts={accounts}
         channels={channels}
         syncingChannelId={syncingChannelId}
@@ -726,6 +764,7 @@ export default function App() {
         setAccStep={setAccStep}
         accCode={accCode}
         setAccCode={setAccCode}
+        accCreatedId={accCreatedId}
         accMsg={accMsg}
         setAccMsg={setAccMsg}
         chForm={chForm}
@@ -733,6 +772,8 @@ export default function App() {
         handleAddAccountSubmit={handleAddAccountSubmit}
         handleVerifyAccCode={handleVerifyAccCode}
         handleRequestAccCode={handleRequestAccCode}
+        openAccountModal={openAccountModal}
+        closeAccountModal={closeAccountModal}
         handleDeleteAccount={handleDeleteAccount}
         handleAddChannelSubmit={handleAddChannelSubmit}
         handleToggleChannelEnabled={handleToggleChannelEnabled}
@@ -747,6 +788,7 @@ export default function App() {
           adminStats={adminStats}
           fetchAdminStats={fetchAdminStats}
           getStatusLabel={getStatusLabel}
+          setActiveTab={setActiveTab}
         />
       )}
 
