@@ -10,7 +10,7 @@ export default function AdminDashboard({
   if (!adminStats) return null
 
   return (
-    <main className="content-area" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+    <main className="content-area">
       <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Назад до каталогу">
         <ArrowLeft size={16} />
       </button>

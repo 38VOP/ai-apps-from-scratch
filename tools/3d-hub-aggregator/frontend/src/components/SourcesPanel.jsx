@@ -73,7 +73,7 @@ export default function SourcesPanel({
 
   return (
     <>
-      <main className="content-area" style={{ maxWidth: 1400, margin: '0 auto', width: '100%' }}>
+      <main className="content-area">
         <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Назад до каталогу">
           <ArrowLeft size={16} />
         </button>
