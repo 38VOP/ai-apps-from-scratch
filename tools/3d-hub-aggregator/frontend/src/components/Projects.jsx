@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { FolderOpen, Plus, Trash2, Edit2, Check, X, Layers, ExternalLink, ArrowLeft } from 'lucide-react'
+import { FolderOpen, Plus, Trash2, Edit2, Check, X, Layers, ExternalLink, Undo } from 'lucide-react'
 
 export default function Projects({
   activeTab,
@@ -50,8 +50,8 @@ export default function Projects({
 
   return (
     <main className="content-area">
-      <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Назад до каталогу">
-        <ArrowLeft size={16} />
+      <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Скасувати">
+        <Undo size={16} />
       </button>
       <div className="sources-container">
         {!selectedProject && (

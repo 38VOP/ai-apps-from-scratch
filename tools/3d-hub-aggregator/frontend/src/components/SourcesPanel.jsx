@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ShieldCheck, RadioTower, Plus, Trash2, RefreshCw, X, ArrowLeft } from 'lucide-react'
+import { ShieldCheck, RadioTower, Plus, Trash2, RefreshCw, X, Undo } from 'lucide-react'
 
 export default function SourcesPanel({
   activeTab,
@@ -74,8 +74,8 @@ export default function SourcesPanel({
   return (
     <>
       <main className="content-area">
-        <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Назад до каталогу">
-          <ArrowLeft size={16} />
+        <button className="back-btn" onClick={() => setActiveTab('catalog')} title="Скасувати">
+          <Undo size={16} />
         </button>
         <div className="sources-container sources-two-col" style={{ maxWidth: '100%' }}>
           <div className="sources-section">
