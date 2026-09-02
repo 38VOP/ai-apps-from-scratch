@@ -278,22 +278,6 @@ export default function SourcesPanel({
           </div>
         </div>
 
-        {/* About / version block */}
-        <div style={{
-          marginTop: 16,
-          marginBottom: 16,
-          padding: '12px 16px',
-          borderRadius: 'var(--radius-md)',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid var(--border)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontSize: '0.78rem',
-          color: 'var(--text-muted)'
-        }}>
-          <span>{`3D Hub Aggregator · ${__COMMIT_HASH__} · ${new Date(__BUILD_DATE__).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`}</span>
-        </div>
       </main>
 
       {showAddAccountModal && (

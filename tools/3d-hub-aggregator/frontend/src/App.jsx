@@ -11,6 +11,7 @@ import Cart from './components/Cart'
 import Projects from './components/Projects'
 import CategoryManager from './components/CategoryManager'
 import SourcesPanel from './components/SourcesPanel'
+import About from './components/About'
 import AdminDashboard from './components/AdminDashboard'
 
 export default function App() {
@@ -791,6 +792,8 @@ export default function App() {
           setActiveTab={setActiveTab}
         />
       )}
+
+      {activeTab === 'about' && <About />}
 
       {/* MODALS */}
       <Cart

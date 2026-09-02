@@ -73,6 +73,9 @@ export default function Catalog({
                   <li className="nav-item" onClick={() => { setActiveTab('admin'); fetchAdminStats(); }}>
                     <span>Статистика</span>
                   </li>
+                  <li className="nav-item" onClick={() => setActiveTab('about')}>
+                    <span>Про застосунок</span>
+                  </li>
                 </ul>
               )}
             </div>
